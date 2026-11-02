@@ -1,0 +1,291 @@
+:root {
+  --bg: #0b1220;
+  --panel: rgba(11, 18, 32, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.14);
+  --text: #f3f5f9;
+  --muted: #a9b3c6;
+  --accent: #ff5a3c;
+  --ok: #3ddc84;
+  --warn: #ffc857;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #1b2433;
+}
+
+.hidden { display: none !important; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: fixed;
+  top: calc(var(--safe-top) + 10px);
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.mode-switch {
+  flex: 1;
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.mode-switch button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---------- Simulation panel ---------- */
+.sim-panel {
+  position: fixed;
+  top: calc(var(--safe-top) + 64px);
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.sim-row { display: flex; gap: 8px; }
+
+.sim-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px; /* verhindert Zoom auf iOS */
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.sim-row button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.sim-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.sim-results li {
+  padding: 9px 8px;
+  border-top: 1px solid var(--panel-border);
+  font-size: 14px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.sim-results li.selected { color: var(--ok); }
+.sim-results li.info { color: var(--muted); cursor: default; }
+
+.sim-hint {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Bottom panel ---------- */
+.panel {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--safe-bottom) + 24px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 22px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.compass {
+  position: relative;
+  flex: 0 0 auto;
+  width: 132px;
+  height: 132px;
+}
+
+.dial {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.25) 70%);
+  transition: transform 0.15s linear;
+}
+
+.ticks {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from -1deg, rgba(255,255,255,0.6) 0deg 2deg, transparent 2deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 82%, #000 83%);
+          mask: radial-gradient(circle, transparent 82%, #000 83%);
+}
+
+.cardinal {
+  position: absolute;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  width: 16px;
+  text-align: center;
+  line-height: 16px;
+}
+.cardinal.n { top: 12px; left: calc(50% - 8px); color: var(--accent); }
+.cardinal.s { bottom: 12px; left: calc(50% - 8px); }
+.cardinal.e { right: 12px; top: calc(50% - 8px); }
+.cardinal.w { left: 12px; top: calc(50% - 8px); }
+
+.arrow {
+  position: absolute;
+  inset: 24px;
+  transition: transform 0.15s linear;
+}
+.arrow svg { width: 100%; height: 100%; display: block; }
+
+.readout { flex: 1; min-width: 0; }
+
+.distance {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.bearing {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.status .warn { color: var(--warn); }
+.status .ok { color: var(--ok); }
+
+.compass-btn {
+  margin-top: 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.panel.arrived .distance { color: var(--ok); }
+
+/* ---------- Map markers ---------- */
+.marker-home {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+.marker-me {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #2f80ff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 6px rgba(47,128,255,0.3), 0 2px 6px rgba(0,0,0,0.5);
+}
+.marker-me.sim { background: #b45cff; box-shadow: 0 0 0 6px rgba(180,92,255,0.3), 0 2px 6px rgba(0,0,0,0.5); }
+
+.leaflet-control-attribution {
+  font-size: 9px;
+  max-width: 70vw;
+}
+.leaflet-top .leaflet-control-zoom { display: none; }
+
+@media (max-width: 360px) {
+  .compass { width: 112px; height: 112px; }
+  .distance { font-size: 28px; }
+}

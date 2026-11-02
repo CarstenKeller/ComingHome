@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Coming Home">
+  <title>Coming Home</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="map" aria-label="Satellitenkarte"></div>
+
+  <header class="topbar">
+    <div class="mode-switch" role="tablist" aria-label="Positionsquelle">
+      <button id="modeGps" class="active" role="tab" aria-selected="true">GPS</button>
+      <button id="modeSim" role="tab" aria-selected="false">Simulation</button>
+    </div>
+    <button id="fitBtn" class="icon-btn" title="Beide Punkte zeigen" aria-label="Beide Punkte zeigen">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </header>
+
+  <form id="simForm" class="sim-panel hidden" autocomplete="off">
+    <div class="sim-row">
+      <input id="simInput" type="search" placeholder="Adresse eingeben, z. B. Marktplatz 1, Paderborn" enterkeyhint="search" aria-label="Adresse für Simulation">
+      <button type="submit">Suchen</button>
+    </div>
+    <ul id="simResults" class="sim-results"></ul>
+    <p class="sim-hint">Tipp: Im Simulationsmodus kannst du auch direkt auf die Karte tippen.</p>
+  </form>
+
+  <section class="panel" aria-live="polite">
+    <div class="compass" id="compass">
+      <div class="dial" id="dial">
+        <span class="cardinal n">N</span>
+        <span class="cardinal e">O</span>
+        <span class="cardinal s">S</span>
+        <span class="cardinal w">W</span>
+        <div class="ticks"></div>
+      </div>
+      <div class="arrow" id="arrow">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <polygon points="50,6 66,58 50,49 34,58" fill="#ff5a3c" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="50" cy="50" r="5" fill="#fff"/>
+        </svg>
+      </div>
+    </div>
+    <div class="readout">
+      <div class="distance" id="distance">–</div>
+      <div class="bearing" id="bearing">Warte auf Position …</div>
+      <div class="status" id="status"></div>
+      <button id="compassBtn" class="compass-btn hidden">Kompass aktivieren</button>
+    </div>
+  </section>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
