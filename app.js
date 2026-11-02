@@ -29,12 +29,15 @@ const state = {
   watchId: null,
   userMovedMap: false,
   gpsError: null,
+  simPanelOpen: true,   // Suchfeld im Simulationsmodus sichtbar?
 };
+const SIM_PANEL_KEY = 'cominghome.simPanelOpen';
+try { state.simPanelOpen = localStorage.getItem(SIM_PANEL_KEY) !== '0'; } catch (_) { /* egal */ }
 
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
 const el = {
-  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'),
+  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), searchToggle: $('searchToggle'),
   simForm: $('simForm'), simInput: $('simInput'), simResults: $('simResults'),
   dial: $('dial'), arrow: $('arrow'),
   distance: $('distance'), bearing: $('bearing'), status: $('status'),
@@ -138,7 +141,7 @@ function fitBoth() {
   if (state.home) pts.push([state.home.lat, state.home.lon]);
   if (pos) pts.push([pos.lat, pos.lon]);
   if (!pts.length) return;
-  const topEl = state.mode === 'sim' ? el.simForm : el.modeGps.parentElement;
+  const topEl = !el.simForm.classList.contains('hidden') ? el.simForm : el.modeGps.parentElement;
   const topPad = topEl.getBoundingClientRect().bottom + 30;
   const bottomPad = window.innerHeight - el.panel.getBoundingClientRect().top + 30;
   programmaticMove = true;
@@ -394,12 +397,51 @@ function setMode(mode) {
   el.modeSim.classList.toggle('active', sim);
   el.modeGps.setAttribute('aria-selected', String(!sim));
   el.modeSim.setAttribute('aria-selected', String(sim));
-  el.simForm.classList.toggle('hidden', !sim);
+  el.searchToggle.classList.toggle('hidden', !sim);
   el.panel.classList.remove('arrived');
   if (!sim) startGps();
+  // Ohne simulierte Position das Suchfeld immer zeigen
+  if (sim && !state.simPos) state.simPanelOpen = true;
+  applySimPanel();
   refresh(true);
   if (sim && !state.simPos) el.simInput.focus();
 }
+
+function applySimPanel() {
+  const show = state.mode === 'sim' && state.simPanelOpen;
+  el.simForm.classList.toggle('hidden', !show);
+  el.searchToggle.setAttribute('aria-pressed', String(show));
+  if (!show) el.simInput.blur();
+}
+
+el.searchToggle.addEventListener('click', () => {
+  state.simPanelOpen = !state.simPanelOpen;
+  try { localStorage.setItem(SIM_PANEL_KEY, state.simPanelOpen ? '1' : '0'); } catch (_) { /* egal */ }
+  applySimPanel();
+  if (!state.userMovedMap) fitBoth();
+});
+
+/* ---------- Virtuelle Tastatur ---------- */
+// Während der Eingabe das Kompass-Panel ausblenden und die oberen Elemente
+// am sichtbaren Bereich ausrichten (iOS verschiebt diesen bei Tastatur).
+const rootStyle = document.documentElement.style;
+function syncViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  rootStyle.setProperty('--vv-top', `${Math.max(0, vv.offsetTop)}px`);
+  rootStyle.setProperty('--vv-h', `${vv.height}px`);
+}
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', syncViewport);
+  visualViewport.addEventListener('scroll', syncViewport);
+  syncViewport();
+}
+el.simInput.addEventListener('focus', () => document.body.classList.add('typing'));
+el.simInput.addEventListener('blur', () => {
+  document.body.classList.remove('typing');
+  // iOS: eventuell verschobene Seite zurücksetzen
+  setTimeout(() => { window.scrollTo(0, 0); syncViewport(); }, 50);
+});
 
 function setSimPos(lat, lon, label) {
   state.simPos = { lat, lon, label };
@@ -454,7 +496,9 @@ map.on('click', (e) => {
 el.modeGps.addEventListener('click', () => setMode('gps'));
 el.modeSim.addEventListener('click', () => setMode('sim'));
 el.fitBtn.addEventListener('click', () => fitBoth());
-window.addEventListener('resize', () => { if (!state.userMovedMap) fitBoth(); });
+window.addEventListener('resize', () => {
+  if (!state.userMovedMap && !document.body.classList.contains('typing')) fitBoth();
+});
 
 (async function main() {
   render();

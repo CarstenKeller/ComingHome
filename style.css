@@ -9,6 +9,8 @@
   --warn: #ffc857;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --vv-top: 0px;   /* Versatz des sichtbaren Bereichs (iOS bei Tastatur) */
+  --vv-h: 100vh;   /* Höhe des sichtbaren Bereichs */
 }
 
 * { box-sizing: border-box; }
@@ -35,7 +37,7 @@ html, body {
 /* ---------- Top bar ---------- */
 .topbar {
   position: fixed;
-  top: calc(var(--safe-top) + 10px);
+  top: calc(var(--safe-top) + var(--vv-top) + 10px);
   left: 16px;
   right: 16px;
   z-index: 1000;
@@ -89,7 +91,7 @@ html, body {
 /* ---------- Simulation panel ---------- */
 .sim-panel {
   position: fixed;
-  top: calc(var(--safe-top) + 64px);
+  top: calc(var(--safe-top) + var(--vv-top) + 64px);
   left: 16px;
   right: 16px;
   z-index: 1000;
@@ -130,7 +132,7 @@ html, body {
   list-style: none;
   margin: 8px 0 0;
   padding: 0;
-  max-height: 30vh;
+  max-height: max(90px, min(30vh, calc(var(--vv-h) - 210px)));
   overflow-y: auto;
 }
 
@@ -255,6 +257,15 @@ html, body {
 }
 
 .panel.arrived .distance { color: var(--ok); }
+
+/* Während der Eingabe: Kompass-Panel ausblenden, damit die virtuelle
+   Tastatur bzw. das Panel das Suchfeld nicht verdeckt. */
+body.typing .panel,
+body.typing .leaflet-control-attribution { display: none; }
+
+#searchToggle .ico-close { display: none; }
+#searchToggle[aria-pressed="true"] .ico-open { display: none; }
+#searchToggle[aria-pressed="true"] .ico-close { display: block; }
 
 /* ---------- Map markers ---------- */
 .marker-home {
