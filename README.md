@@ -30,7 +30,7 @@ Der Workflow `.github/workflows/pages.yml` veröffentlicht die App bei jedem Pus
 auf den Standard-Branch. Einmalig nötig: Repository → **Settings → Pages →
 Build and deployment → Source: „GitHub Actions“**. Danach erreichbar unter
 
-https://carstenkeller.github.io/cominghome/
+https://carstenkeller.github.io/ComingHome/
 
 Lokal testen:
 
