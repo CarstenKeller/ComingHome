@@ -22,8 +22,15 @@ einer direkten Linie (Großkreis) dazwischen.
 
 Es gibt keinen Build-Schritt – die Dateien sind direkt auslieferbar.
 **Wichtig:** GPS und Kompass funktionieren im Browser nur über **HTTPS**
-(oder `localhost`). Einfachste Variante: GitHub Pages
-(Repository → Settings → Pages → Branch wählen, Ordner `/ (root)`).
+(oder `localhost`).
+
+### GitHub Pages
+
+Der Workflow `.github/workflows/pages.yml` veröffentlicht die App bei jedem Push
+auf den Standard-Branch. Einmalig nötig: Repository → **Settings → Pages →
+Build and deployment → Source: „GitHub Actions“**. Danach erreichbar unter
+
+https://carstenkeller.github.io/cominghome/
 
 Lokal testen:
 
