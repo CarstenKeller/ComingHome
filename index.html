@@ -19,12 +19,12 @@
   <div id="map" aria-label="Satellitenkarte"></div>
 
   <header class="topbar">
-    <div class="mode-switch" role="tablist" aria-label="Positionsquelle">
+    <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="Positionsquelle">
       <button id="modeGps" class="active" role="tab" aria-selected="true">GPS</button>
       <button id="modeSim" role="tab" aria-selected="false">Simulation</button>
     </div>
-    <button id="searchToggle" class="icon-btn hidden" title="Suchfeld ein-/ausblenden" aria-label="Suchfeld ein- oder ausblenden" aria-pressed="true" aria-controls="simForm">
-      <svg class="ico-open" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15 15 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <button id="topToggle" class="icon-btn" title="Obere Leiste ein-/ausblenden" aria-label="Obere Leiste ein- oder ausblenden" aria-pressed="true" aria-controls="modeSwitch simForm">
+      <svg class="ico-open" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <svg class="ico-close" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <button id="fitBtn" class="icon-btn" title="Beide Punkte zeigen" aria-label="Beide Punkte zeigen">
@@ -64,6 +64,28 @@
       <button id="compassBtn" class="compass-btn hidden">Kompass aktivieren</button>
     </div>
   </section>
+
+  <div id="gallery" class="gallery hidden" role="dialog" aria-modal="true" aria-label="Bildergalerie Zuhause">
+    <div class="gallery-head">
+      <div>
+        <div class="gallery-title">Zuhause</div>
+        <div class="gallery-sub" id="galleryAddr"></div>
+      </div>
+      <button id="galleryClose" class="icon-btn" aria-label="Galerie schließen" title="Schließen">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="gallery-track" id="galleryTrack"></div>
+    <div class="gallery-foot">
+      <button id="galleryPrev" class="icon-btn" aria-label="Vorheriges Bild">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span id="galleryCount" class="gallery-count"></span>
+      <button id="galleryNext" class="icon-btn" aria-label="Nächstes Bild">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="app.js"></script>

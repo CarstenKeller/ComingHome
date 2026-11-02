@@ -29,15 +29,18 @@ const state = {
   watchId: null,
   userMovedMap: false,
   gpsError: null,
-  simPanelOpen: true,   // Suchfeld im Simulationsmodus sichtbar?
+  topOpen: true,        // obere Leiste (Moduswahl + Suchfeld) sichtbar?
 };
-const SIM_PANEL_KEY = 'cominghome.simPanelOpen';
-try { state.simPanelOpen = localStorage.getItem(SIM_PANEL_KEY) !== '0'; } catch (_) { /* egal */ }
+const TOP_OPEN_KEY = 'cominghome.topOpen';
+try { state.topOpen = localStorage.getItem(TOP_OPEN_KEY) !== '0'; } catch (_) { /* egal */ }
+
+// Bilder der Galerie am Heimatpunkt (Reihenfolge = Anzeige)
+const GALLERY = ['01', '02', '03', '04', '05', '06', '07'].map((n) => `gallery/${n}.jpg`);
 
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
 const el = {
-  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), searchToggle: $('searchToggle'),
+  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), topToggle: $('topToggle'), modeSwitch: $('modeSwitch'), topbar: document.querySelector('.topbar'),
   simForm: $('simForm'), simInput: $('simInput'), simResults: $('simResults'),
   dial: $('dial'), arrow: $('arrow'),
   distance: $('distance'), bearing: $('bearing'), status: $('status'),
@@ -141,7 +144,7 @@ function fitBoth() {
   if (state.home) pts.push([state.home.lat, state.home.lon]);
   if (pos) pts.push([pos.lat, pos.lon]);
   if (!pts.length) return;
-  const topEl = !el.simForm.classList.contains('hidden') ? el.simForm : el.modeGps.parentElement;
+  const topEl = !el.simForm.classList.contains('hidden') ? el.simForm : el.topbar;
   const topPad = topEl.getBoundingClientRect().bottom + 30;
   const bottomPad = window.innerHeight - el.panel.getBoundingClientRect().top + 30;
   programmaticMove = true;
@@ -166,7 +169,7 @@ function updateMap() {
 
   if (state.home && !homeMarker) {
     homeMarker = L.marker([state.home.lat, state.home.lon], { icon: homeIcon, zIndexOffset: 500 })
-      .bindPopup(`Zuhause<br>${HOME.label}${state.home.approx ? '<br><b>(ungefähre Position)</b>' : ''}`)
+      .on('click', openGallery)
       .addTo(map);
   }
 
@@ -397,28 +400,81 @@ function setMode(mode) {
   el.modeSim.classList.toggle('active', sim);
   el.modeGps.setAttribute('aria-selected', String(!sim));
   el.modeSim.setAttribute('aria-selected', String(sim));
-  el.searchToggle.classList.toggle('hidden', !sim);
   el.panel.classList.remove('arrived');
   if (!sim) startGps();
   // Ohne simulierte Position das Suchfeld immer zeigen
-  if (sim && !state.simPos) state.simPanelOpen = true;
-  applySimPanel();
+  if (sim && !state.simPos) state.topOpen = true;
+  applyTop();
   refresh(true);
   if (sim && !state.simPos) el.simInput.focus();
 }
 
-function applySimPanel() {
-  const show = state.mode === 'sim' && state.simPanelOpen;
-  el.simForm.classList.toggle('hidden', !show);
-  el.searchToggle.setAttribute('aria-pressed', String(show));
-  if (!show) el.simInput.blur();
+// Obere Leiste (GPS/Simulation-Umschalter und Suchfeld) ein-/ausblenden
+function applyTop() {
+  const open = state.topOpen;
+  el.topbar.classList.toggle('collapsed', !open);
+  el.simForm.classList.toggle('hidden', !(open && state.mode === 'sim'));
+  el.topToggle.setAttribute('aria-pressed', String(open));
+  if (!open) el.simInput.blur();
 }
 
-el.searchToggle.addEventListener('click', () => {
-  state.simPanelOpen = !state.simPanelOpen;
-  try { localStorage.setItem(SIM_PANEL_KEY, state.simPanelOpen ? '1' : '0'); } catch (_) { /* egal */ }
-  applySimPanel();
+el.topToggle.addEventListener('click', () => {
+  state.topOpen = !state.topOpen;
+  try { localStorage.setItem(TOP_OPEN_KEY, state.topOpen ? '1' : '0'); } catch (_) { /* egal */ }
+  applyTop();
   if (!state.userMovedMap) fitBoth();
+});
+
+/* ---------- Galerie am Heimatpunkt ---------- */
+const gal = {
+  root: $('gallery'), track: $('galleryTrack'), count: $('galleryCount'),
+  prev: $('galleryPrev'), next: $('galleryNext'), close: $('galleryClose'), addr: $('galleryAddr'),
+};
+let galBuilt = false;
+function galIndex() {
+  return Math.round(gal.track.scrollLeft / Math.max(1, gal.track.clientWidth));
+}
+function galUpdate() {
+  const i = galIndex();
+  gal.count.textContent = `${i + 1} / ${GALLERY.length}`;
+  gal.prev.disabled = i <= 0;
+  gal.next.disabled = i >= GALLERY.length - 1;
+}
+function galGo(delta) {
+  const i = Math.min(GALLERY.length - 1, Math.max(0, galIndex() + delta));
+  gal.track.scrollTo({ left: i * gal.track.clientWidth, behavior: 'smooth' });
+}
+function openGallery() {
+  if (!galBuilt) {
+    GALLERY.forEach((src, i) => {
+      const slide = document.createElement('div');
+      slide.className = 'gallery-slide';
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = `Bild ${i + 1} von ${GALLERY.length}`;
+      img.loading = i < 2 ? 'eager' : 'lazy';
+      img.decoding = 'async';
+      slide.appendChild(img);
+      gal.track.appendChild(slide);
+    });
+    galBuilt = true;
+  }
+  gal.addr.textContent = HOME.label + (state.home?.approx ? ' (Position ungefähr)' : '');
+  gal.root.classList.remove('hidden');
+  gal.track.scrollLeft = 0;
+  galUpdate();
+  gal.close.focus();
+}
+function closeGallery() { gal.root.classList.add('hidden'); }
+gal.close.addEventListener('click', closeGallery);
+gal.prev.addEventListener('click', () => galGo(-1));
+gal.next.addEventListener('click', () => galGo(1));
+gal.track.addEventListener('scroll', () => requestAnimationFrame(galUpdate), { passive: true });
+document.addEventListener('keydown', (e) => {
+  if (gal.root.classList.contains('hidden')) return;
+  if (e.key === 'Escape') closeGallery();
+  else if (e.key === 'ArrowLeft') galGo(-1);
+  else if (e.key === 'ArrowRight') galGo(1);
 });
 
 /* ---------- Virtuelle Tastatur ---------- */
@@ -501,6 +557,7 @@ window.addEventListener('resize', () => {
 });
 
 (async function main() {
+  applyTop();
   render();
   initCompass();
   startGps();
