@@ -288,8 +288,7 @@ body.typing .leaflet-control-attribution { display: none; }
   gap: 12px;
   padding: 0 16px;
 }
-.gallery-title { font-weight: 700; font-size: 18px; }
-.gallery-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.gallery-title { margin: 0; font-weight: 700; font-size: 20px; }
 .gallery-track {
   flex: 1;
   min-height: 0;

@@ -428,7 +428,7 @@ el.topToggle.addEventListener('click', () => {
 /* ---------- Galerie am Heimatpunkt ---------- */
 const gal = {
   root: $('gallery'), track: $('galleryTrack'), count: $('galleryCount'),
-  prev: $('galleryPrev'), next: $('galleryNext'), close: $('galleryClose'), addr: $('galleryAddr'),
+  prev: $('galleryPrev'), next: $('galleryNext'), close: $('galleryClose'),
 };
 let galBuilt = false;
 function galIndex() {
@@ -459,7 +459,6 @@ function openGallery() {
     });
     galBuilt = true;
   }
-  gal.addr.textContent = HOME.label + (state.home?.approx ? ' (Position ungefähr)' : '');
   gal.root.classList.remove('hidden');
   gal.track.scrollLeft = 0;
   galUpdate();
