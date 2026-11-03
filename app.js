@@ -569,23 +569,13 @@ function getGpsOnce(timeoutMs = 10000) {
   });
 }
 
-el.shareBtn.addEventListener('click', async () => {
-  let pos = currentPos();
-  if (!pos && state.mode === 'gps') {
-    showToast('Ermittle GPS-Position …');
-    try {
-      pos = await getGpsOnce();
-      state.gpsPos = pos;
-      refresh();
-    } catch (_) {
-      showToast('Keine GPS-Position verfügbar – Standortfreigabe prüfen.');
-      return;
-    }
-  }
-  if (!pos) {
-    showToast('Noch keine simulierte Position – bitte Adresse eingeben oder auf die Karte tippen.');
-    return;
-  }
+const sheet = {
+  root: $('shareSheet'), text: $('shareText'), wa: $('shareWhatsApp'),
+  native: $('shareNative'), copy: $('shareCopy'), cancel: $('shareCancel'),
+};
+let pendingShare = null;
+
+function buildShare(pos) {
   const lat = pos.lat.toFixed(5);
   const lon = pos.lon.toFixed(5);
   // Bei weitergeteilter Position den ursprünglichen Zeitstempel behalten
@@ -595,23 +585,85 @@ el.shareBtn.addEventListener('click', async () => {
     ? `Ich bin auf dem Weg nach Hause (Stand ${formatTime(stamp)} Uhr)`
     : `Position auf dem Weg nach Hause (Stand ${formatTime(stamp)} Uhr)`;
   if (state.home) text += ` – noch ${formatDistance(distanceMeters(pos, state.home))} Luftlinie`;
-  text += `.\nPosition: ${lat}, ${lon}\n`;
-  const data = { title: 'Coming Home – Position', text, url };
+  text += `.\nPosition: ${lat}, ${lon}`;
+  return { title: 'Coming Home – Position', text, url, full: `${text}\n${url}` };
+}
+
+function openShareSheet(share) {
+  pendingShare = share;
+  sheet.text.textContent = share.full;
+  sheet.wa.href = `https://wa.me/?text=${encodeURIComponent(share.full)}`;
+  sheet.native.classList.toggle('hidden', !navigator.share);
+  sheet.root.classList.remove('hidden');
+}
+function closeShareSheet() { sheet.root.classList.add('hidden'); }
+
+async function copyText(text) {
   try {
-    if (navigator.share) {
-      await navigator.share(data);
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    // Fallback für Browser ohne Clipboard-API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+async function nativeShare(share) {
+  await navigator.share({ title: share.title, text: share.text, url: share.url });
+}
+
+sheet.cancel.addEventListener('click', closeShareSheet);
+sheet.root.addEventListener('click', (e) => { if (e.target === sheet.root) closeShareSheet(); });
+sheet.wa.addEventListener('click', () => setTimeout(closeShareSheet, 300));
+sheet.copy.addEventListener('click', async () => {
+  if (!pendingShare) return;
+  const ok = await copyText(pendingShare.full);
+  showToast(ok ? 'Text kopiert – jetzt z. B. in WhatsApp einfügen.' : 'Kopieren nicht möglich – Text bitte markieren und kopieren.');
+  if (ok) closeShareSheet();
+});
+sheet.native.addEventListener('click', async () => {
+  if (!pendingShare) return;
+  try {
+    await nativeShare(pendingShare);
+    closeShareSheet();
+  } catch (err) {
+    if (err?.name !== 'AbortError') showToast(`Teilen nicht möglich (${err?.name || err}).`);
+  }
+});
+
+el.shareBtn.addEventListener('click', async () => {
+  try {
+    let pos = currentPos();
+    if (!pos && state.mode === 'gps') {
+      showToast('Ermittle GPS-Position …');
+      try {
+        pos = await getGpsOnce();
+        state.gpsPos = pos;
+        refresh();
+      } catch (_) {
+        showToast('Keine GPS-Position verfügbar – Standortfreigabe prüfen.');
+        return;
+      }
+    }
+    if (!pos) {
+      showToast('Noch keine simulierte Position – bitte Adresse eingeben oder auf die Karte tippen.');
       return;
     }
+    const share = buildShare(pos);
+    openShareSheet(share);
   } catch (err) {
-    if (err && err.name === 'AbortError') return; // Nutzer hat abgebrochen
-    // z. B. NotAllowedError nach langer GPS-Wartezeit -> Kopieren
-  }
-  const full = `${text}${url}`;
-  try {
-    await navigator.clipboard.writeText(full);
-    showToast('Position kopiert – jetzt z. B. in WhatsApp einfügen.');
-  } catch (_) {
-    window.prompt('Zum Teilen kopieren:', full);
+    console.error(err);
+    showToast(`Fehler beim Teilen: ${err?.message || err}`);
   }
 });
 

@@ -89,6 +89,17 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
 
+  <div id="shareSheet" class="share-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="share-box">
+      <h2 id="shareTitle">Position teilen</h2>
+      <pre id="shareText" class="share-text"></pre>
+      <a id="shareWhatsApp" class="share-action wa" href="#" target="_blank" rel="noopener">Per WhatsApp senden</a>
+      <button id="shareNative" class="share-action" type="button">Andere App …</button>
+      <button id="shareCopy" class="share-action" type="button">Text kopieren</button>
+      <button id="shareCancel" class="share-action ghost" type="button">Schließen</button>
+    </div>
+  </div>
+
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
