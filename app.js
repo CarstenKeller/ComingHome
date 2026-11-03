@@ -460,11 +460,15 @@ function openGallery() {
     galBuilt = true;
   }
   gal.root.classList.remove('hidden');
+  document.body.classList.add('gallery-open');
   gal.track.scrollLeft = 0;
   galUpdate();
   gal.close.focus();
 }
-function closeGallery() { gal.root.classList.add('hidden'); }
+function closeGallery() {
+  gal.root.classList.add('hidden');
+  document.body.classList.remove('gallery-open');
+}
 gal.close.addEventListener('click', closeGallery);
 gal.prev.addEventListener('click', () => galGo(-1));
 gal.next.addEventListener('click', () => galGo(1));
