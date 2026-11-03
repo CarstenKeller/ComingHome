@@ -40,6 +40,7 @@ const GALLERY = ['01', '02', '03', '04', '05', '06', '07'].map((n) => `gallery/$
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
 const el = {
+  shareBtn: $('shareBtn'), toast: $('toast'),
   modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), topToggle: $('topToggle'), modeSwitch: $('modeSwitch'), topbar: document.querySelector('.topbar'),
   simForm: $('simForm'), simInput: $('simInput'), simResults: $('simResults'),
   dial: $('dial'), arrow: $('arrow'),
@@ -227,7 +228,7 @@ function render() {
 
   if (state.mode === 'sim') {
     status.push(state.simPos
-      ? `<span class="warn">Simulation:</span> ${escapeHtml(shorten(state.simPos.label, 60))}`
+      ? `<span class="warn">Simulation:</span> ${escapeHtml(shorten(state.simPos.label, 60))}${state.simPos.time ? ` (${formatAge(state.simPos.time)})` : ''}`
       : '<span class="warn">Simulationsmodus</span>');
   } else if (state.gpsError) {
     status.push(`<span class="warn">${escapeHtml(state.gpsError)}</span>`);
@@ -242,6 +243,19 @@ function render() {
     status.push('<span class="warn">Heimatposition nur ungefähr (Geocodierung fehlgeschlagen)</span>');
   }
   el.status.innerHTML = status.join('<br>');
+  el.shareBtn.classList.toggle('hidden', !pos);
+}
+
+function formatTime(ms) {
+  return new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+function formatAge(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'gerade eben';
+  if (min < 60) return `vor ${min} Min.`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `vor ${h} Std. ${min % 60} Min.`;
+  return `Stand ${new Date(ms).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
 }
 
 // Rotation ohne 359°→0°-Sprung der CSS-Transition
@@ -507,11 +521,82 @@ function setSimPos(lat, lon, label) {
   refresh(true);
 }
 
+/* ---------- Position teilen / geteilte Position übernehmen ---------- */
+// Erkennt Koordinaten in eingefügtem Text: App-Link (?pos=…&t=…),
+// Kartenlinks (…@51.7,9.0 / q=51.7,9.0) oder einfach "51.71890, 8.75750".
+function parseSharedPosition(text) {
+  if (!text) return null;
+  let m = text.match(/[?&#]pos=(-?\d+(?:\.\d+)?)(?:,|%2C)(-?\d+(?:\.\d+)?)/i);
+  if (!m) m = text.match(/(-?\d{1,2}\.\d{3,})\s*[,;]?\s*(-?\d{1,3}\.\d{3,})/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lon = parseFloat(m[2]);
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return null;
+  const t = text.match(/[?&#]t=(\d{10,13})/);
+  let time = null;
+  if (t) {
+    time = parseInt(t[1], 10);
+    if (time < 1e12) time *= 1000; // Sekunden -> Millisekunden
+    if (time > Date.now() + 5 * 60000) time = null; // unplausibel (Zukunft)
+  }
+  return { lat, lon, time };
+}
+
+function applySharedPosition(p) {
+  const label = `Geteilte Position ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}${p.time ? `, Stand ${formatTime(p.time)} Uhr` : ''}`;
+  [...el.simResults.children].forEach((c) => c.remove());
+  state.simPos = { lat: p.lat, lon: p.lon, label, time: p.time };
+  if (state.mode !== 'sim') setMode('sim');
+  else refresh(true);
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  el.toast.textContent = msg;
+  el.toast.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.add('hidden'), 3000);
+}
+
+el.shareBtn.addEventListener('click', async () => {
+  const pos = currentPos();
+  if (!pos) return;
+  const lat = pos.lat.toFixed(5);
+  const lon = pos.lon.toFixed(5);
+  const now = Date.now();
+  const url = `${location.origin}${location.pathname}?pos=${lat},${lon}&t=${Math.round(now / 1000)}`;
+  let text = `Ich bin auf dem Weg nach Hause (Stand ${formatTime(now)} Uhr)`;
+  if (state.home) text += ` – noch ${formatDistance(distanceMeters(pos, state.home))} Luftlinie`;
+  text += `.\nPosition: ${lat}, ${lon}\n`;
+  const data = { title: 'Coming Home – meine Position', text, url };
+  try {
+    if (navigator.share) {
+      await navigator.share(data);
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // Nutzer hat abgebrochen
+  }
+  const full = `${text}${url}`;
+  try {
+    await navigator.clipboard.writeText(full);
+    showToast('Position kopiert – jetzt z. B. in WhatsApp einfügen.');
+  } catch (_) {
+    window.prompt('Zum Teilen kopieren:', full);
+  }
+});
+
 let lastSearch = 0;
 el.simForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = el.simInput.value.trim();
   if (!q) return;
+  const shared = parseSharedPosition(q);
+  if (shared) {
+    applySharedPosition(shared);
+    el.simInput.blur();
+    return;
+  }
   // Nominatim-Nutzungsrichtlinie: max. 1 Anfrage pro Sekunde
   const wait = 1100 - (Date.now() - lastSearch);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -560,13 +645,19 @@ window.addEventListener('resize', () => {
 });
 
 (async function main() {
+  // Mit geteiltem Link geöffnet? Dann direkt die geteilte Position zeigen.
+  const shared = /[?&]pos=/.test(location.search) ? parseSharedPosition(location.search) : null;
   applyTop();
   render();
   initCompass();
-  startGps();
+  if (!shared) startGps();
   await loadHome();
+  if (shared) applySharedPosition(shared);
   refresh(true);
 })();
+
+// Altersangabe der geteilten Position aktuell halten
+setInterval(() => { if (state.mode === 'sim' && state.simPos?.time) render(); }, 30000);
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

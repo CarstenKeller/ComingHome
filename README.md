@@ -13,6 +13,11 @@ einer direkten Linie (Großkreis) dazwischen.
 - **GPS-Modus**: Position über die Ortungsfunktion des Geräts (inkl. Genauigkeitskreis).
 - **Simulationsmodus**: Adresse eingeben (Geocodierung über OpenStreetMap/Nominatim)
   oder direkt auf die Karte tippen – diese Position wird statt GPS verwendet.
+- **Position teilen**: Der Teilen-Knopf verschickt (z. B. per WhatsApp) die
+  aktuelle Position mit Uhrzeit, Entfernung und einem Link. Wer den Link öffnet,
+  sieht die Position direkt im Simulationsmodus. Alternativ die ganze Nachricht
+  oder nur die Koordinaten („51.71890, 8.75750“) ins Suchfeld der Simulation
+  einfügen. Die Position wird nicht live aktualisiert – sie ist ein Schnappschuss.
 - **Kompass**: Der Pfeil zeigt nach Hause, die Rose dreht sich mit dem Gerät
   (Magnetometer über die DeviceOrientation-API). Ohne Kompassdaten gilt der Pfeil
   „Norden oben“, passend zur Karte.

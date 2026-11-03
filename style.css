@@ -355,3 +355,21 @@ body.gallery-open .panel { visibility: hidden; }
   .compass { width: 112px; height: 112px; }
   .distance { font-size: 28px; }
 }
+
+/* ---------- Hinweis-Einblendung ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--safe-top) + var(--vv-top) + 70px);
+  transform: translateX(-50%);
+  z-index: 3000;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(11, 18, 32, 0.92);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 14px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}

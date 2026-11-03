@@ -23,6 +23,9 @@
       <button id="modeGps" class="active" role="tab" aria-selected="true">GPS</button>
       <button id="modeSim" role="tab" aria-selected="false">Simulation</button>
     </div>
+    <button id="shareBtn" class="icon-btn hidden" title="Position teilen" aria-label="Meine Position teilen">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="18" cy="5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="19" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8.3 10.7 7.4-4.3M8.3 13.3l7.4 4.3" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
     <button id="topToggle" class="icon-btn" title="Obere Leiste ein-/ausblenden" aria-label="Obere Leiste ein- oder ausblenden" aria-pressed="true" aria-controls="modeSwitch simForm">
       <svg class="ico-open" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <svg class="ico-close" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -34,11 +37,11 @@
 
   <form id="simForm" class="sim-panel hidden" autocomplete="off">
     <div class="sim-row">
-      <input id="simInput" type="search" placeholder="Adresse eingeben, z. B. Marktplatz 1, Paderborn" enterkeyhint="search" aria-label="Adresse für Simulation">
+      <input id="simInput" type="search" placeholder="Adresse oder Position" enterkeyhint="search" aria-label="Adresse für Simulation">
       <button type="submit">Suchen</button>
     </div>
     <ul id="simResults" class="sim-results"></ul>
-    <p class="sim-hint">Tipp: Im Simulationsmodus kannst du auch direkt auf die Karte tippen.</p>
+    <p class="sim-hint">Tipp: Geteilte Nachricht einfach komplett einfügen – oder direkt auf die Karte tippen.</p>
   </form>
 
   <section class="panel" aria-live="polite">
@@ -83,6 +86,8 @@
       </button>
     </div>
   </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="app.js"></script>
