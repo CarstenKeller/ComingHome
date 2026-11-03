@@ -243,7 +243,6 @@ function render() {
     status.push('<span class="warn">Heimatposition nur ungefähr (Geocodierung fehlgeschlagen)</span>');
   }
   el.status.innerHTML = status.join('<br>');
-  el.shareBtn.classList.toggle('hidden', !pos);
 }
 
 function formatTime(ms) {
@@ -558,17 +557,46 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.toast.classList.add('hidden'), 3000);
 }
 
+// Einmalige GPS-Abfrage, falls beim Teilen noch keine Position vorliegt
+function getGpsOnce(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    if (!('geolocation' in navigator)) return reject(new Error('Keine Ortung verfügbar'));
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }),
+      reject,
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 10000 },
+    );
+  });
+}
+
 el.shareBtn.addEventListener('click', async () => {
-  const pos = currentPos();
-  if (!pos) return;
+  let pos = currentPos();
+  if (!pos && state.mode === 'gps') {
+    showToast('Ermittle GPS-Position …');
+    try {
+      pos = await getGpsOnce();
+      state.gpsPos = pos;
+      refresh();
+    } catch (_) {
+      showToast('Keine GPS-Position verfügbar – Standortfreigabe prüfen.');
+      return;
+    }
+  }
+  if (!pos) {
+    showToast('Noch keine simulierte Position – bitte Adresse eingeben oder auf die Karte tippen.');
+    return;
+  }
   const lat = pos.lat.toFixed(5);
   const lon = pos.lon.toFixed(5);
-  const now = Date.now();
-  const url = `${location.origin}${location.pathname}?pos=${lat},${lon}&t=${Math.round(now / 1000)}`;
-  let text = `Ich bin auf dem Weg nach Hause (Stand ${formatTime(now)} Uhr)`;
+  // Bei weitergeteilter Position den ursprünglichen Zeitstempel behalten
+  const stamp = (state.mode === 'sim' && state.simPos?.time) ? state.simPos.time : Date.now();
+  const url = `${location.origin}${location.pathname}?pos=${lat},${lon}&t=${Math.round(stamp / 1000)}`;
+  let text = state.mode === 'gps'
+    ? `Ich bin auf dem Weg nach Hause (Stand ${formatTime(stamp)} Uhr)`
+    : `Position auf dem Weg nach Hause (Stand ${formatTime(stamp)} Uhr)`;
   if (state.home) text += ` – noch ${formatDistance(distanceMeters(pos, state.home))} Luftlinie`;
   text += `.\nPosition: ${lat}, ${lon}\n`;
-  const data = { title: 'Coming Home – meine Position', text, url };
+  const data = { title: 'Coming Home – Position', text, url };
   try {
     if (navigator.share) {
       await navigator.share(data);
@@ -576,6 +604,7 @@ el.shareBtn.addEventListener('click', async () => {
     }
   } catch (err) {
     if (err && err.name === 'AbortError') return; // Nutzer hat abgebrochen
+    // z. B. NotAllowedError nach langer GPS-Wartezeit -> Kopieren
   }
   const full = `${text}${url}`;
   try {
