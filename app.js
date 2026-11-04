@@ -110,18 +110,23 @@ function formatDistance(m) {
 const map = L.map('map', {
   zoomControl: false, attributionControl: true, worldCopyJump: true,
   zoomSnap: 0,              // stufenloser Zoom, damit der Abstand exakt passt
+  inertia: false,           // kein Nachgleiten nach dem Ziehen
   rotate: true,             // Drehung über leaflet-rotate
   rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false,
 })
   .setView([HOME.approx.lat, HOME.approx.lon], 13);
 
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
+const TILE_URLS = [
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+];
+L.tileLayer(TILE_URLS[0], {
+  maxZoom: 19, keepBuffer: 6,
   attribution: 'Bilder &copy; Esri, Maxar, Earthstar Geographics, GIS User Community',
 }).addTo(map);
 
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19, opacity: 0.85,
+L.tileLayer(TILE_URLS[1], {
+  maxZoom: 19, opacity: 0.85, keepBuffer: 6,
 }).addTo(map);
 
 const homeIcon = L.divIcon({
@@ -167,12 +172,6 @@ const ringCenter = (elm) => {
 
 // Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
 // Position mittig im unteren Ring und Zuhause mittig im oberen Ring liegt.
-// Einrasten: Liegt die Blickrichtung nahe genug an der Richtung nach Hause,
-// wird die Karte exakt auf Zuhause ausgerichtet (mit Hysterese gegen Flattern).
-const SNAP_IN_DEG = 6;
-const SNAP_OUT_DEG = 10;
-let snapped = false;
-
 // Dreht sich die Karte gerade mit dem Kompass? (nur GPS-Modus mit Kompassdaten)
 const followsCompass = () => state.mode === 'gps' && state.heading !== null;
 
@@ -204,16 +203,9 @@ function calibrate() {
   // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
   const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
 
-  // Welche Richtung soll nach oben zeigen?
-  let up = angle;
-  if (followsCompass()) {
-    let diff = norm360(state.heading - angle);
-    if (diff > 180) diff -= 360;
-    if (snapped ? Math.abs(diff) > SNAP_OUT_DEG : Math.abs(diff) < SNAP_IN_DEG) snapped = !snapped;
-    up = snapped ? angle : state.heading;
-  } else {
-    snapped = false;
-  }
+  // Welche Richtung zeigt nach oben? Mit Kompass immer die echte Blickrichtung
+  // (Karte ist am Kompass ausgerichtet), sonst die Richtung nach Hause.
+  const up = followsCompass() ? state.heading : angle;
 
   let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
@@ -228,25 +220,31 @@ function calibrate() {
   });
   setCalibrated(true);
   updateHomeLock();
+  schedulePrefetch();
 }
 
 // Liegt der Heimatpunkt komplett im oberen Ring? -> grün, Ring pulsiert,
 // beim Einrasten 2 s Vibration.
-const HOME_RADIUS = 17;  // Heimatpunkt 34 px
-const RING_RADIUS = 20;  // Ring 40 px (Außenkante)
+// Mit Hysterese, damit es bei leichtem Zittern nicht ständig wechselt:
+// Einrasten, wenn der Mittelpunkt höchstens LOCK_IN px vom Ringmittelpunkt
+// entfernt ist; Lösen erst ab LOCK_OUT px.
+const LOCK_IN = 12;
+const LOCK_OUT = 20;     // = Ringradius
 let homeLocked = false;
 function updateHomeLock() {
   const pos = currentPos();
   let inside = false;
   if (state.home && pos && homeMarker) {
     const hp = map.latLngToContainerPoint([state.home.lat, state.home.lon]);
-    inside = hp.distanceTo(ringCenter(el.ringTop)) + HOME_RADIUS <= RING_RADIUS + 0.5;
+    const dist = hp.distanceTo(ringCenter(el.ringTop));
+    inside = homeLocked ? dist <= LOCK_OUT : dist <= LOCK_IN;
   }
   if (inside === homeLocked) return;
   homeLocked = inside;
   el.ringTop.classList.toggle('locked', inside);
   homeMarker?.getElement()?.querySelector('.marker-home')?.classList.toggle('locked', inside);
-  if (inside && navigator.vibrate) {
+  // Vibration nur, wenn das Einrasten durch Drehen des Handys entsteht
+  if (inside && followsCompass() && navigator.vibrate) {
     try { navigator.vibrate(2000); } catch (_) { /* nicht unterstützt */ }
   }
 }
@@ -420,7 +418,16 @@ function startGps() {
   state.watchId = navigator.geolocation.watchPosition(
     (p) => {
       state.gpsError = null;
-      state.gpsPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
+      const fix = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
+      const old = state.gpsPos;
+      // GPS-Rauschen ausfiltern: Kleine Sprünge innerhalb der Messgenauigkeit
+      // ignorieren, sonst „wackelt“ die Karte im Stand.
+      if (old && !first) {
+        const moved = distanceMeters(old, fix);
+        const better = fix.acc < old.acc * 0.7;
+        if (moved < Math.max(4, fix.acc * 0.75) && !better) return;
+      }
+      state.gpsPos = fix;
       if (state.mode === 'gps') refresh(first);
       first = false;
     },
@@ -451,7 +458,7 @@ function rotateWithCompass() {
   if (lastAppliedHeading !== null) {
     let d = Math.abs(norm360(state.heading - lastAppliedHeading));
     if (d > 180) d = 360 - d;
-    if (d < 0.5) return; // kleine Änderungen ignorieren
+    if (d < 0.2) return; // winzige Änderungen ignorieren
   }
   lastAppliedHeading = state.heading;
   if (state.calibrated) {
@@ -831,6 +838,75 @@ map.on('click', (e) => {
   setCalibrated(false);
 });
 
+/* ---------- Kartenkacheln vorab laden (offline) ---------- */
+// Lädt die Kacheln rund um die aktuelle Position großzügig vor
+// (aktuelle Zoomstufe sowie eine darüber und darunter). Der Service Worker
+// speichert sie; danach kommen sie ohne Netz aus dem Cache.
+let lastPrefetch = null;
+let prefetchTimer = null;
+let prefetchNotified = false;
+
+function schedulePrefetch() {
+  clearTimeout(prefetchTimer);
+  prefetchTimer = setTimeout(prefetchTiles, 1500);
+}
+
+function tileUrlsAround(latlng, z, radiusPx) {
+  const urls = [];
+  const n = 2 ** z;
+  const c = map.project(latlng, z);
+  const x0 = Math.floor((c.x - radiusPx) / 256), x1 = Math.floor((c.x + radiusPx) / 256);
+  const y0 = Math.max(0, Math.floor((c.y - radiusPx) / 256)), y1 = Math.min(n - 1, Math.floor((c.y + radiusPx) / 256));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x + 0.5) * 256 - c.x, dy = (y + 0.5) * 256 - c.y;
+      if (Math.hypot(dx, dy) > radiusPx + 182) continue; // nur Kreisfläche
+      const wx = ((x % n) + n) % n;
+      for (const t of TILE_URLS) urls.push(t.replace('{z}', z).replace('{y}', y).replace('{x}', wx));
+    }
+  }
+  return urls;
+}
+
+function prefetchTiles() {
+  const sw = navigator.serviceWorker?.controller;
+  const pos = currentPos() || state.home;
+  if (!sw || !pos) return;
+  const Z = Math.max(3, Math.min(19, Math.round(map.getZoom())));
+  const size = map.getSize();
+  const radius = 1.5 * Math.hypot(size.x, size.y); // großzügig: 1,5 × Bildschirmdiagonale
+  const mPerPx = 40075016 * Math.cos(pos.lat * Math.PI / 180) / (256 * 2 ** Z);
+  // Nur neu laden, wenn Zoomstufe gewechselt oder ein gutes Stück bewegt
+  if (lastPrefetch && lastPrefetch.z === Z && distanceMeters(lastPrefetch, pos) < radius * mPerPx / 3) return;
+  lastPrefetch = { lat: pos.lat, lon: pos.lon, z: Z };
+  const ll = L.latLng(pos.lat, pos.lon);
+  const urls = [
+    ...tileUrlsAround(ll, Z, radius),
+    ...(Z > 3 ? tileUrlsAround(ll, Z - 1, radius / 2) : []),
+    ...(Z < 19 ? tileUrlsAround(ll, Z + 1, radius) : []), // halber Radius (geographisch)
+  ];
+  sw.postMessage({ type: 'prefetch', urls });
+}
+
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.type !== 'prefetch-done' || prefetchNotified) return;
+  const { total, failed, loaded } = e.data;
+  if (total && failed === total) {
+    prefetchNotified = true;
+    showToast('Karte konnte nicht offline vorgeladen werden.');
+  } else if (loaded > 0) {
+    prefetchNotified = true;
+    showToast(`Karte für die Umgebung offline gespeichert (${loaded} Kacheln).`);
+  }
+});
+map.on('moveend', () => schedulePrefetch());
+
+// Ändert sich die Höhe des Kompassbereichs (z. B. andere Statuszeilen),
+// verschiebt sich der untere Ring -> neu ausrichten.
+if ('ResizeObserver' in window) {
+  new ResizeObserver(() => { if (state.calibrated) calibrate(); }).observe(el.panel);
+}
+
 /* ---------- Start ---------- */
 el.modeGps.addEventListener('click', () => setMode('gps'));
 el.modeSim.addEventListener('click', () => setMode('sim'));
@@ -854,6 +930,6 @@ window.addEventListener('resize', () => {
 // Altersangabe der geteilten Position aktuell halten
 setInterval(() => { if (state.mode === 'sim' && state.simPos?.time) render(); }, 30000);
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

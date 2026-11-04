@@ -20,12 +20,16 @@ Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
 Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
 GPS-Positionen automatisch.
 
-Im GPS-Modus mit Kompass dreht sich die Karte mit dem Handy (Blickrichtung
-oben). Schaut man bis auf ca. 6° in Richtung Zuhause, rastet die Karte ein:
-Der Heimatpunkt liegt dann genau im oberen Ring, beide werden grün, der Ring
-pulsiert und das Handy vibriert 2 Sekunden (Vibration nur, wo der Browser sie
-unterstützt – z. B. Android/Chrome, nicht iPhone/Safari). Gelöst wird die
-Einrastung erst ab ca. 10° Abweichung.
+Im GPS-Modus mit Kompass ist die Karte am Kompass ausgerichtet und dreht sich
+mit dem Handy (Blickrichtung oben). Zeigt das Handy genau auf das Zuhause
+(Heimatpunkt höchstens 12 px vom Ringmittelpunkt, ca. 1°), rastet es ein:
+Heimatpunkt und oberer Ring werden grün, der Ring pulsiert und das Handy
+vibriert 2 Sekunden (nur wo der Browser Vibration unterstützt, z. B.
+Android/Chrome, nicht iPhone/Safari). Gelöst wird erst ab 20 px Abweichung.
+
+Kartenkacheln rund um die aktuelle Position (1,5 × Bildschirmdiagonale, drei
+Zoomstufen) werden automatisch vorgeladen und im Browser gespeichert
+(höchstens 4000 Kacheln). Das verbraucht mobiles Datenvolumen.
 
 - **GPS-Modus**: Position über die Ortungsfunktion des Geräts (inkl. Genauigkeitskreis).
 - **Simulationsmodus**: Adresse eingeben (Geocodierung über OpenStreetMap/Nominatim)
@@ -81,6 +85,8 @@ freigegeben werden (Vorgabe von iOS).
   über Nominatim (OpenStreetMap). Es gelten deren Nutzungsbedingungen
   (Nominatim: max. 1 Anfrage/Sekunde, keine Massenabfragen). Für privaten
   Gebrauch sollte das passen – eine rechtliche Prüfung ist das nicht.
+  Ob das Vorabladen/Zwischenspeichern von Esri-Kacheln nach deren Bedingungen
+  zulässig ist, ist nicht geprüft.
 - Leaflet 1.9.4 liegt unter `vendor/leaflet` (BSD-2-Clause-Lizenz).
 - leaflet-rotate 0.2.8 (Kartendrehung) liegt unter `vendor/leaflet-rotate`
   und steht unter der **GPL-3.0**. Wer die App weitergibt, muss deren
