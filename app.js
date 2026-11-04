@@ -16,7 +16,8 @@ const HOME = {
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const HOME_CACHE_KEY = 'cominghome.home.v1';
-const ARRIVED_METERS = 25;
+const LEAVE_METERS = 60;   // Ankunftsmodus endet erst über dieser Entfernung
+const RING_DIAMETER = 40;  // px; Ankunft, sobald sich die Ringe berühren
 
 /* ---------- Zustand ---------- */
 const state = {
@@ -168,7 +169,8 @@ function setCalibrated(on) {
 // Unter NEAR_METERS wird nicht weiter gezoomt: Stattdessen wandern die beiden
 // Ringe gleichmäßig aufeinander zu (Abstand proportional zur Entfernung).
 const NEAR_METERS = 200;
-let ringShift = 0; // aktuelle Verschiebung jedes Rings Richtung Mitte (px)
+let ringShift = 0;
+let lastRingSpan = 550; // voller Ringabstand in px (zuletzt gemessen) // aktuelle Verschiebung jedes Rings Richtung Mitte (px)
 function setRingShift(px) {
   ringShift = px;
   el.ringTop.style.transform = px ? `translateY(${px}px)` : '';
@@ -208,6 +210,7 @@ function calibrate() {
   const baseBottom = ringCenter(el.ringBottom).add(L.point(0, ringShift));
   const baseTop = ringCenter(el.ringTop).subtract(L.point(0, ringShift));
   const full = baseBottom.distanceTo(baseTop);
+  lastRingSpan = full;
   const meters = distanceMeters(pos, home);
   // Nah dran: Ringe rücken zusammen, Zoom bleibt auf dem 200-m-Maßstab
   const near = meters < NEAR_METERS;
@@ -262,7 +265,14 @@ function calibrate() {
 const LOCK_IN = 12;
 const LOCK_OUT = 20;     // = Ringradius
 let homeLocked = false;
+function resetHomeLock() {
+  homeLocked = false;
+  el.ringTop.classList.remove('locked');
+  homeMarker?.getElement()?.querySelector('.marker-home')?.classList.remove('locked');
+}
+
 function updateHomeLock() {
+  if (state.arrivedMode) return; // im Ankunftsmodus abgeschaltet
   const pos = currentPos();
   let inside = false;
   if (state.home && pos && homeMarker) {
@@ -336,9 +346,9 @@ function render() {
   } else {
     const dist = distanceMeters(pos, state.home);
     const brg = initialBearing(pos, state.home);
-    const arrived = dist <= Math.max(ARRIVED_METERS, state.mode === 'gps' ? (pos.acc || 0) : 0);
+    checkArrival(dist);
+    const arrived = state.arrivedMode;
     el.panel.classList.toggle('arrived', arrived);
-    checkArrival(arrived, dist);
     el.distance.textContent = arrived ? 'Zuhause!' : formatDistance(dist);
     el.bearing.textContent = arrived ? `${formatDistance(dist)} entfernt`
       : `${cardinal(brg)} · ${Math.round(brg)}°`;
@@ -462,6 +472,8 @@ function startGps() {
       const old = state.gpsPos;
       // GPS-Rauschen ausfiltern: Kleine Sprünge innerhalb der Messgenauigkeit
       // ignorieren, sonst „wackelt“ die Karte im Stand.
+      // Ankunftsmodus: Position einfrieren, bis man sich wieder entfernt
+      if (state.arrivedMode && state.home && distanceMeters(fix, state.home) <= LEAVE_METERS) return;
       if (old && !first) {
         const moved = distanceMeters(old, fix);
         const better = fix.acc < old.acc * 0.7;
@@ -1049,10 +1061,17 @@ if ('ResizeObserver' in window) {
 
 /* ---------- Ankunft: Feuerwerk ---------- */
 // Einmal pro Ankunft; erneut erst, nachdem man sich wieder > 60 m entfernt hat.
-let arrivalCelebrated = false;
-function checkArrival(arrived, dist) {
-  if (arrived && !arrivalCelebrated) {
-    arrivalCelebrated = true;
+// Ankunft = die beiden Ringe berühren sich (Abstand der Mittelpunkte <= Ring-
+// durchmesser). Dann: Feuerwerk + Vibration und „Ankunftsmodus“ – bis man sich
+// wieder über LEAVE_METERS entfernt, laufen nur noch Kompass und Kartendrehung
+// (keine Positionssprünge, kein Einrasten/Grünfärben, kein Galerie-Knopf).
+function arrivalMeters() {
+  return NEAR_METERS * RING_DIAMETER / Math.max(1, lastRingSpan);
+}
+function checkArrival(dist) {
+  if (!state.arrivedMode && dist <= arrivalMeters()) {
+    state.arrivedMode = true;
+    resetHomeLock();
     fireworks(10000);
     if (navigator.vibrate) {
       // Rhythmisch vibrieren, passend zu den Raketen (ca. 10 s)
@@ -1060,69 +1079,86 @@ function checkArrival(arrived, dist) {
       for (let t = 0; t < 10000; t += 700) pattern.push(350, 350);
       try { navigator.vibrate(pattern); } catch (_) { /* nicht unterstützt */ }
     }
-  } else if (!arrived && dist > 60) {
-    arrivalCelebrated = false;
+  } else if (state.arrivedMode && dist > LEAVE_METERS) {
+    state.arrivedMode = false;
   }
 }
 
 function fireworks(duration) {
+  // Transparenter Hintergrund: Es wird jedes Bild komplett gelöscht und nur
+  // die Funken (mit kurzen Schweifen) gezeichnet – die Karte bleibt sichtbar.
   const canvas = document.createElement('canvas');
   canvas.className = 'fireworks';
   document.body.appendChild(canvas);
   const ctx = canvas.getContext('2d');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let W = innerWidth, H = innerHeight;
   const resize = () => {
-    canvas.width = innerWidth * dpr;
-    canvas.height = innerHeight * dpr;
+    W = innerWidth; H = innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
   resize();
   window.addEventListener('resize', resize);
-  const colors = ['#ff5a3c', '#ffc857', '#3ddc84', '#2f80ff', '#b45cff', '#ffffff', '#ff7ab6'];
+  const colors = ['#ff5a3c', '#ffc857', '#3ddc84', '#2f80ff', '#b45cff', '#ffffff', '#ff7ab6', '#4de1ff'];
   const rockets = [];
   const sparks = [];
   const start = performance.now();
   let lastLaunch = 0;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const scale = Math.min(W, H) / 390; // größer auf größeren Bildschirmen
 
   function launch() {
-    rockets.push({
-      x: innerWidth * (0.15 + Math.random() * 0.7), y: innerHeight,
-      vx: (Math.random() - 0.5) * 1.5, vy: -(innerHeight / 75) * (0.8 + Math.random() * 0.35),
-      color: colors[Math.floor(Math.random() * colors.length)],
-    });
+    // Zielpunkt irgendwo auf dem ganzen Bildschirm
+    const tx = W * (0.05 + Math.random() * 0.9);
+    const ty = H * (0.08 + Math.random() * 0.7);
+    const x = tx + (Math.random() - 0.5) * W * 0.2;
+    const frames = 45 + Math.random() * 20;
+    rockets.push({ x, y: H + 10, tx, ty, vx: (tx - x) / frames, vy: (ty - H - 10) / frames, n: frames,
+      color: colors[Math.floor(Math.random() * colors.length)], color2: colors[Math.floor(Math.random() * colors.length)] });
   }
   function explode(r) {
-    const n = 60 + Math.floor(Math.random() * 40);
+    const n = 110 + Math.floor(Math.random() * 70);
+    const power = (4 + Math.random() * 3.5) * scale;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2, v = 1.5 + Math.random() * 3.5;
-      sparks.push({ x: r.x, y: r.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, color: Math.random() < 0.8 ? r.color : '#fff' });
+      const a = Math.random() * Math.PI * 2;
+      const v = power * (0.35 + Math.random() * 0.65);
+      sparks.push({ x: r.x, y: r.y, px: r.x, py: r.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        life: 1, decay: 0.008 + Math.random() * 0.008, color: Math.random() < 0.5 ? r.color : r.color2, w: 1.5 + Math.random() * 1.8 });
     }
   }
   function frame(now) {
     const t = now - start;
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(0, 0, innerWidth, innerHeight);
-    ctx.globalCompositeOperation = 'lighter';
-    if (t < duration - 1500 && now - lastLaunch > (reduced ? 900 : 350)) { launch(); lastLaunch = now; }
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+    const gap = reduced ? 900 : 260;
+    if (t < duration - 1800 && now - lastLaunch > gap) {
+      launch();
+      if (!reduced && Math.random() < 0.45) launch(); // oft zwei auf einmal
+      lastLaunch = now;
+    }
+    ctx.lineCap = 'round';
     for (let i = rockets.length - 1; i >= 0; i--) {
       const r = rockets[i];
-      r.x += r.vx; r.y += r.vy; r.vy += 0.12;
-      ctx.fillStyle = r.color;
-      ctx.beginPath(); ctx.arc(r.x, r.y, 2.5, 0, Math.PI * 2); ctx.fill();
-      if (r.vy >= -1) { explode(r); rockets.splice(i, 1); }
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(r.x, r.y); r.x += r.vx; r.y += r.vy; ctx.lineTo(r.x, r.y); ctx.stroke();
+      if (--r.n <= 0) { explode(r); rockets.splice(i, 1); }
     }
     for (let i = sparks.length - 1; i >= 0; i--) {
       const p = sparks[i];
-      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.vx *= 0.985; p.vy *= 0.985;
-      p.life -= 0.012;
+      p.px = p.x; p.py = p.y;
+      p.x += p.vx; p.y += p.vy; p.vy += 0.06 * scale; p.vx *= 0.975; p.vy *= 0.975;
+      p.life -= p.decay;
       if (p.life <= 0) { sparks.splice(i, 1); continue; }
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = Math.min(1, p.life * 1.4);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = p.w;
+      // Schweif: Linie vom vorherigen Punkt, etwas verlängert
+      ctx.beginPath(); ctx.moveTo(p.px - p.vx * 2, p.py - p.vy * 2); ctx.lineTo(p.x, p.y); ctx.stroke();
     }
+    ctx.globalAlpha = 1;
     if (t < duration) requestAnimationFrame(frame);
     else {
       canvas.classList.add('done');

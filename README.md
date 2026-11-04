@@ -28,9 +28,10 @@ Galerie-Knopf und fliegt in einem Bogen über die Knopfspalte; er öffnet die
 Galerie und verschwindet wieder, wenn die Galerie geschlossen wird.
 
 Unter 200 m Entfernung wird nicht weiter gezoomt; stattdessen rücken die beiden
-Ringe gleichmäßig zusammen (Abstand proportional zur Entfernung). Bei Ankunft
-(≤ 25 m bzw. innerhalb der GPS-Genauigkeit) gibt es 10 Sekunden Feuerwerk und
-das Handy vibriert; erneut erst, nachdem man sich wieder über 60 m entfernt hat.
+Ringe gleichmäßig zusammen (Abstand proportional zur Entfernung). Berühren sich
+die Ringe (Ankunft), gibt es 10 Sekunden Feuerwerk über den ganzen Bildschirm
+und das Handy vibriert. Danach laufen bis zu einer Entfernung von über 60 m nur
+noch Kompass und Kartendrehung (Position eingefroren, kein Einrasten).
 Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
 Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
 GPS-Positionen automatisch.
