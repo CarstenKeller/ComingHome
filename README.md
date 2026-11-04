@@ -21,6 +21,11 @@ Simulation – nur vom Kompass (ohne Kompass: Norden oben); den Heimatpunkt brin
 man durch Drehen des Handys in den oberen Ring.
 
 Beim Start erscheint der Hinweis, das Handy flach zu halten.
+
+Der Kompassbereich (rechts neben den Knöpfen) zeigt nur Kompass und
+Entfernung. Wird der obere Ring grün, materialisiert sich darin ein
+Galerie-Knopf und fliegt in einem Bogen über die Knopfspalte; er öffnet die
+Galerie und verschwindet wieder, wenn die Galerie geschlossen wird.
 Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
 Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
 GPS-Positionen automatisch.

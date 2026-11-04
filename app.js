@@ -246,6 +246,7 @@ function updateHomeLock() {
   }
   if (inside === homeLocked) return;
   homeLocked = inside;
+  if (inside) summonGalleryButton();
   el.ringTop.classList.toggle('locked', inside);
   homeMarker?.getElement()?.querySelector('.marker-home')?.classList.toggle('locked', inside);
   // Vibration nur, wenn das Einrasten durch Drehen des Handys entsteht
@@ -449,7 +450,10 @@ function startGps() {
         2: 'Standort nicht verfügbar.',
         3: 'Zeitüberschreitung bei der Ortung.',
       }[err.code] || err.message;
-      if (state.mode === 'gps') render();
+      if (state.mode === 'gps') {
+        render();
+        if (!state.gpsErrorShown) { state.gpsErrorShown = true; showToast(state.gpsError); }
+      }
     },
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 },
   );
@@ -639,7 +643,77 @@ function openGallery() {
 function closeGallery() {
   gal.root.classList.add('hidden');
   document.body.classList.remove('gallery-open');
+  dismissGalleryButton();
 }
+
+/* ---------- Galerie-Knopf ----------
+ * Wird der obere Ring grün, materialisiert sich im Ring ein Galerie-Knopf,
+ * fliegt kurz darauf in einem leichten Bogen über die Knopfspalte und bleibt
+ * dort, bis die Galerie geschlossen wird. Ist er schon da, passiert nichts. */
+const galleryBtn = $('galleryBtn');
+let galleryBtnState = 'hidden'; // hidden | arriving | docked | leaving
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function summonGalleryButton() {
+  if (galleryBtnState !== 'hidden') return;
+  galleryBtnState = 'arriving';
+  const ring = el.ringTop.getBoundingClientRect();
+  const size = 44;
+  // 1) Im oberen Ring materialisieren
+  galleryBtn.classList.remove('hidden', 'dematerializing');
+  galleryBtn.classList.add('flying', 'materializing');
+  galleryBtn.style.left = `${ring.left + ring.width / 2 - size / 2}px`;
+  galleryBtn.style.top = `${ring.top + ring.height / 2 - size / 2}px`;
+  document.body.appendChild(galleryBtn);
+
+  // 2) Nach kurzer Pause im Bogen zur Knopfspalte fliegen
+  setTimeout(() => {
+    if (galleryBtnState !== 'arriving') return;
+    galleryBtn.classList.remove('materializing');
+    const nav = document.querySelector('.side-btns');
+    const first = nav.firstElementChild.getBoundingClientRect();
+    const start = galleryBtn.getBoundingClientRect();
+    const end = { left: first.left, top: first.top - 10 - size };
+    const dx = end.left - start.left;
+    const dy = end.top - start.top;
+    const dock = () => {
+      galleryBtn.classList.remove('flying');
+      galleryBtn.style.left = galleryBtn.style.top = galleryBtn.style.transform = '';
+      nav.insertBefore(galleryBtn, nav.firstChild);
+      galleryBtnState = 'docked';
+    };
+    if (reducedMotion() || !galleryBtn.animate) { dock(); return; }
+    // Leichter Bogen: quadratische Bézierkurve mit seitlich versetztem Kontrollpunkt
+    const cx = dx * 0.5 + dy * 0.18;
+    const cy = dy * 0.5 - dx * 0.18;
+    const frames = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24;
+      const x = 2 * (1 - t) * t * cx + t * t * dx;
+      const y = 2 * (1 - t) * t * cy + t * t * dy;
+      frames.push({ transform: `translate(${x}px, ${y}px)` });
+    }
+    const anim = galleryBtn.animate(frames, { duration: 900, easing: 'ease-in-out', fill: 'forwards' });
+    anim.onfinish = () => { anim.cancel(); dock(); };
+  }, 700);
+}
+
+function dismissGalleryButton() {
+  if (galleryBtnState === 'hidden' || galleryBtnState === 'leaving') return;
+  galleryBtnState = 'leaving';
+  galleryBtn.classList.remove('materializing');
+  galleryBtn.classList.add('dematerializing');
+  setTimeout(() => {
+    galleryBtn.classList.add('hidden');
+    galleryBtn.classList.remove('dematerializing', 'flying');
+    galleryBtnState = 'hidden';
+  }, reducedMotion() ? 20 : 500);
+}
+
+galleryBtn.addEventListener('click', () => {
+  if (galleryBtnState === 'leaving') return;
+  openGallery();
+});
 gal.close.addEventListener('click', closeGallery);
 gal.prev.addEventListener('click', () => galGo(-1));
 gal.next.addEventListener('click', () => galGo(1));

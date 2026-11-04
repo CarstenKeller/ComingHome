@@ -155,11 +155,10 @@ html, body {
 
 /* ---------- Bottom panel ---------- */
 .panel {
-  --side: 70px; /* Platz links für die Knopfspalte (16 + 44 + 10) */
+  /* Füllt den Bereich zwischen Knopfspalte (16 + 44 + 10 px) und rechtem Rand */
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(340px, calc(100vw - 2 * var(--side)));
+  left: 70px;
+  right: 16px;
   bottom: calc(var(--safe-bottom) + 24px);
   z-index: 1000;
   display: flex;
@@ -409,7 +408,7 @@ body.typing .side-btns { display: none; }
 .ring-bottom {
   position: absolute;
   top: -54px;
-  left: calc(50% - 20px);
+  left: calc(50vw - 70px - 20px); /* horizontal bildschirmmittig */
 }
 
 /* ---------- Hinweis-Einblendung ---------- */
@@ -487,3 +486,31 @@ body.typing .side-btns { display: none; }
 .share-sheet.hint { align-items: center; z-index: 2600; }
 .share-sheet.hint p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text); }
 .share-sheet.hint .share-action { margin-top: 4px; }
+
+/* Kompassbereich: nur Kompass und Entfernung */
+.panel .bearing, .panel .status, .panel .compass-btn { display: none !important; }
+.panel .readout { text-align: center; }
+.panel .distance { font-size: 32px; }
+@media (max-width: 360px) { .panel .distance { font-size: 26px; } }
+
+/* ---------- Galerie-Knopf (erscheint im oberen Ring) ---------- */
+.gallery-btn { background: var(--ok); color: #06210f; border-color: rgba(255,255,255,0.6); }
+.gallery-btn.flying {
+  position: fixed;
+  z-index: 1500;
+  margin: 0;
+}
+@keyframes materialize {
+  0%   { opacity: 0; transform: scale(0.2); filter: blur(8px) brightness(2); box-shadow: 0 0 0 0 rgba(61,220,132,0.9); }
+  60%  { opacity: 1; filter: blur(1px) brightness(1.5); box-shadow: 0 0 22px 8px rgba(61,220,132,0.7); }
+  100% { opacity: 1; transform: scale(1); filter: none; box-shadow: 0 0 0 0 rgba(61,220,132,0); }
+}
+@keyframes dematerialize {
+  0%   { opacity: 1; transform: scale(1); filter: none; }
+  100% { opacity: 0; transform: scale(0.2); filter: blur(8px) brightness(2); }
+}
+.gallery-btn.materializing { animation: materialize 0.6s ease-out both; }
+.gallery-btn.dematerializing { animation: dematerialize 0.5s ease-in both; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .gallery-btn.materializing, .gallery-btn.dematerializing { animation-duration: 0.01s; }
+}
