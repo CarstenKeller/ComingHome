@@ -2,7 +2,7 @@
 // - App-Dateien: Netzwerk zuerst, sonst Cache (offline nutzbar)
 // - Kartenkacheln (Esri): Cache zuerst; die App lädt den Bereich um die
 //   aktuelle Position vorab (Nachricht "prefetch").
-const CACHE = 'cominghome-v14';
+const CACHE = 'cominghome-v15';
 const TILE_CACHE = 'cominghome-tiles-v1';
 const TILE_HOST = 'server.arcgisonline.com';
 const MAX_TILES = 4000; // danach werden die ältesten Kacheln gelöscht
@@ -58,7 +58,9 @@ self.addEventListener('fetch', (e) => {
   }
   if (url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    // HTTP-Cache umgehen (GitHub Pages cacht bis zu 10 Min.), damit
+    // Aktualisierungen sofort ankommen
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

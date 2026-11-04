@@ -482,3 +482,8 @@ body.typing .side-btns { display: none; }
 }
 .share-action.wa { background: #25d366; color: #06210f; }
 .share-action.ghost { background: transparent; color: var(--muted); }
+
+/* ---------- Start-Hinweis ---------- */
+.share-sheet.hint { align-items: center; z-index: 2600; }
+.share-sheet.hint p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text); }
+.share-sheet.hint .share-action { margin-top: 4px; }

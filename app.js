@@ -175,10 +175,12 @@ const ringCenter = (elm) => {
 // Dreht sich die Karte gerade mit dem Kompass? (nur GPS-Modus mit Kompassdaten)
 const followsCompass = () => state.mode === 'gps' && state.heading !== null;
 
-// Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
-// Position mittig im unteren Ring liegt und der Abstand zu Zuhause dem Abstand
-// der Ringmittelpunkte entspricht. Im GPS-Modus mit Kompass zeigt die
-// Blickrichtung nach oben, sonst die Richtung nach Hause.
+// Kalibrieren: Karte so zoomen und verschieben, dass die aktuelle Position
+// mittig im unteren Ring liegt und der Abstand zu Zuhause dem Abstand der
+// Ringmittelpunkte entspricht. Die Drehung kommt im GPS-Modus allein vom
+// Kompass (ohne Kompass: Norden oben) – den Heimatpunkt bringt man durch
+// Drehen des Handys in den oberen Ring. Nur in der Simulation zeigt die
+// Richtung nach Hause nach oben.
 function calibrate() {
   const pos = currentPos();
   const home = state.home;
@@ -187,6 +189,7 @@ function calibrate() {
     programmatic(() => {
       // Auch ohne GPS-Position mit dem Kompass drehen
       if (followsCompass()) map.setBearing(-state.heading);
+      else if (state.mode === 'gps') map.setBearing(0);
       if (p) map.setView([p.lat, p.lon], 15, { animate: false });
     });
     setCalibrated(true);
@@ -207,9 +210,11 @@ function calibrate() {
   // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
   const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
 
-  // Welche Richtung zeigt nach oben? Mit Kompass immer die echte Blickrichtung
-  // (Karte ist am Kompass ausgerichtet), sonst die Richtung nach Hause.
-  const up = followsCompass() ? state.heading : angle;
+  // Welche Richtung zeigt nach oben?
+  let up;
+  if (followsCompass()) up = state.heading;       // am Kompass ausgerichtet
+  else if (state.mode === 'gps') up = 0;          // kein Kompass: Norden oben
+  else up = angle;                                // Simulation: Richtung nach Hause
 
   let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
@@ -333,7 +338,7 @@ function render() {
     status.push({
       'needs-permission': '<span class="warn">Kompass aus – bitte aktivieren</span>',
       denied: '<span class="warn">Kompass verweigert (Einstellungen)</span>',
-      unavailable: '<span class="warn">Kein Kompass: Karte nicht gedreht</span>',
+      unavailable: '<span class="warn">Kein Kompass: Norden oben</span>',
       pending: '<span class="warn">Warte auf Kompass …</span>',
     }[compassState] || '<span class="warn">Kein Kompass</span>');
   } else if (state.mode === 'gps') {
@@ -522,16 +527,23 @@ function listenOrientation() {
 }
 
 let compassState = 'pending'; // pending | needs-permission | denied | unavailable | ok
+let permissionPending = false;
 async function requestCompassPermission() {
+  if (permissionPending) return;
+  permissionPending = true;
   try {
     const res = await DeviceOrientationEvent.requestPermission();
-    if (res !== 'granted') {
+    if (res === 'granted') {
+      if (state.heading === null) compassState = 'pending'; // warte auf Daten
+    } else {
       compassState = 'denied';
       el.compassBtn.textContent = 'Kompass verweigert';
     }
   } catch (err) {
     compassState = 'unavailable';
     el.compassBtn.textContent = 'Kompass nicht verfügbar';
+  } finally {
+    permissionPending = false;
   }
   render();
 }
@@ -938,6 +950,20 @@ if ('ResizeObserver' in window) {
   new ResizeObserver(() => { if (state.calibrated) calibrate(); }).observe(el.panel);
 }
 
+/* ---------- Start-Hinweis ---------- */
+// Wird bei jedem Start gezeigt. Das Tippen auf „Verstanden“ dient zugleich
+// als Nutzeraktion für die Kompass-Freigabe (iPhone) und versucht, die
+// Bildschirmdrehung auf Hochformat zu sperren (klappt nur in manchen Browsern).
+function showStartHint() {
+  const hint = $('startHint');
+  hint.classList.remove('hidden');
+  $('startHintOk').addEventListener('click', async () => {
+    hint.classList.add('hidden');
+    if (state.heading === null && compassState === 'needs-permission') requestCompassPermission();
+    try { await screen.orientation?.lock?.('portrait'); } catch (_) { /* nicht unterstützt */ }
+  }, { once: true });
+}
+
 /* ---------- Start ---------- */
 el.modeGps.addEventListener('click', () => setMode('gps'));
 el.modeSim.addEventListener('click', () => setMode('sim'));
@@ -947,6 +973,7 @@ window.addEventListener('resize', () => {
 });
 
 (async function main() {
+  showStartHint();
   // Mit geteiltem Link geöffnet? Dann direkt die geteilte Position zeigen.
   const shared = /[?&]pos=/.test(location.search) ? parseSharedPosition(location.search) : null;
   applyTop();
