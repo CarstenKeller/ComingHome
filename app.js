@@ -27,7 +27,7 @@ const state = {
   heading: null,        // Grad, 0 = Norden (geglättet)
   headingSource: null,
   watchId: null,
-  userMovedMap: false,
+  calibrated: true,     // Karte ausgerichtet (Position im unteren, Zuhause im oberen Ring)?
   gpsError: null,
   topOpen: false,       // Einstellungen (Moduswahl + Suchfeld) oben eingeblendet?
 };
@@ -107,7 +107,12 @@ function formatDistance(m) {
 }
 
 /* ---------- Karte ---------- */
-const map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true })
+const map = L.map('map', {
+  zoomControl: false, attributionControl: true, worldCopyJump: true,
+  zoomSnap: 0,              // stufenloser Zoom, damit der Abstand exakt passt
+  rotate: true,             // Drehung über leaflet-rotate
+  rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false,
+})
   .setView([HOME.approx.lat, HOME.approx.lon], 13);
 
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -136,30 +141,65 @@ const lineHalo = L.polyline([], { color: '#000', weight: 7, opacity: 0.35, inter
 const line = L.polyline([], { color: '#ff5a3c', weight: 4, opacity: 0.95, dashArray: '10 8', interactive: false }).addTo(map);
 
 let programmaticMove = false;
-map.on('dragstart zoomstart', () => { if (!programmaticMove) state.userMovedMap = true; });
-
-function fitBoth() {
-  const pos = currentPos();
-  const pts = [];
-  if (state.home) pts.push([state.home.lat, state.home.lon]);
-  if (pos) pts.push([pos.lat, pos.lon]);
-  if (!pts.length) return;
-  let topEl = el.ringTop;
-  if (!el.simForm.classList.contains('hidden')) topEl = el.simForm;
-  else if (!el.topbar.classList.contains('collapsed')) topEl = el.topbar;
-  const topPad = topEl.getBoundingClientRect().bottom + 24;
-  const bottomPad = window.innerHeight - el.ringBottom.getBoundingClientRect().top + 24;
+let programmaticTimer = null;
+function beginProgrammatic() {
   programmaticMove = true;
-  if (pts.length === 1) {
-    map.setView(pts[0], 16);
-  } else {
-    map.fitBounds(L.latLngBounds(line.getLatLngs().length ? line.getLatLngs() : pts), {
-      paddingTopLeft: [40, topPad], paddingBottomRight: [40, bottomPad], maxZoom: 18,
-    });
+  clearTimeout(programmaticTimer);
+  programmaticTimer = setTimeout(() => { programmaticMove = false; }, 300);
+}
+
+// Manuelles Verschieben/Zoomen beendet den kalibrierten Zustand
+map.on('dragstart zoomstart', () => { if (!programmaticMove) setCalibrated(false); });
+
+function setCalibrated(on) {
+  state.calibrated = on;
+  const pos = currentPos();
+  const active = on && !!pos && !!state.home;
+  el.ringBottom.classList.toggle('active', active);
+  el.fitBtn.classList.toggle('alert', !on);
+}
+
+const ringCenter = (elm) => {
+  const r = elm.getBoundingClientRect();
+  return L.point(r.left + r.width / 2, r.top + r.height / 2);
+};
+
+// Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
+// Position mittig im unteren Ring und Zuhause mittig im oberen Ring liegt.
+function calibrate() {
+  const pos = currentPos();
+  const home = state.home;
+  beginProgrammatic();
+  if (!pos || !home) {
+    const p = pos || home;
+    if (p) map.setView([p.lat, p.lon], 15, { animate: false });
+    setCalibrated(true);
+    return;
   }
-  map.once('moveend', () => { programmaticMove = false; });
-  setTimeout(() => { programmaticMove = false; }, 600);
-  state.userMovedMap = false;
+  const bottom = ringCenter(el.ringBottom);
+  const top = ringCenter(el.ringTop);
+  const wanted = bottom.distanceTo(top); // Abstand der Ringmittelpunkte in px
+
+  // Richtung und Abstand in Kartenpixeln (Zoom 0, ungedreht)
+  const p1 = map.project([pos.lat, pos.lon], 0);
+  const p2 = map.project([home.lat, home.lon], 0);
+  const d = p2.subtract(p1);
+  const d0 = Math.hypot(d.x, d.y);
+  // Winkel des Vektors Position -> Zuhause, im Uhrzeigersinn ab "oben"
+  const angle = Math.atan2(d.x, -d.y) * 180 / Math.PI;
+  // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
+  const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
+
+  let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
+  zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
+
+  map.setBearing(axis - angle);
+  map.setView([pos.lat, pos.lon], zoom, { animate: false });
+  // Position liegt jetzt in der Bildschirmmitte -> so verschieben, dass sie im unteren Ring liegt
+  const c = map.getSize().divideBy(2);
+  const target = c.multiplyBy(2).subtract(bottom);
+  map.setView(map.containerPointToLatLng(target), zoom, { animate: false });
+  setCalibrated(true);
 }
 
 function currentPos() {
@@ -238,7 +278,7 @@ function render() {
   }
 
   if (state.heading === null) {
-    status.push('<span class="warn">Kein Kompass: Norden oben</span>');
+    status.push('<span class="warn">Kein Kompass: Pfeil ab Nord</span>');
   }
   if (state.home?.approx) {
     status.push('<span class="warn">Zuhause nur ungefähr</span>');
@@ -271,10 +311,11 @@ function smoothAngle(key, target) {
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const shorten = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
-function refresh(refit = false) {
+function refresh(recalibrate = false) {
   updateMap();
   render();
-  if (refit || !state.userMovedMap) fitBoth();
+  if (recalibrate || state.calibrated) calibrate();
+  else setCalibrated(false);
 }
 
 /* ---------- Geocodierung (Nominatim / OpenStreetMap) ---------- */
@@ -435,7 +476,6 @@ function applyTop() {
 el.settingsBtn.addEventListener('click', () => {
   state.topOpen = !state.topOpen;
   applyTop();
-  if (!state.userMovedMap) fitBoth();
 });
 
 /* ---------- Galerie am Heimatpunkt ---------- */
@@ -715,14 +755,16 @@ map.on('click', (e) => {
   state.simPos = { lat, lon: lng, label: `Kartenpunkt ${lat.toFixed(5)}, ${lng.toFixed(5)}` };
   updateMap();
   render();
+  // Position liegt nicht mehr im unteren Ring -> nicht mehr kalibriert
+  setCalibrated(false);
 });
 
 /* ---------- Start ---------- */
 el.modeGps.addEventListener('click', () => setMode('gps'));
 el.modeSim.addEventListener('click', () => setMode('sim'));
-el.fitBtn.addEventListener('click', () => fitBoth());
+el.fitBtn.addEventListener('click', () => calibrate());
 window.addEventListener('resize', () => {
-  if (!state.userMovedMap && !document.body.classList.contains('typing')) fitBoth();
+  if (state.calibrated && !document.body.classList.contains('typing')) calibrate();
 });
 
 (async function main() {

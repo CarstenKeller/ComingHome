@@ -251,7 +251,6 @@ html, body {
   font-size: 12px;
   font-weight: 600;
   padding: 6px 10px;
-  white-space: nowrap;
   max-width: 100%;
   border-radius: 10px;
   border: 0;
@@ -359,7 +358,7 @@ body.gallery-open .panel { visibility: hidden; }
 @media (max-width: 360px) {
   .compass { width: 84px; height: 84px; }
   .distance { font-size: 22px; }
-  .compass-btn { white-space: normal; font-size: 11px; }
+  .compass-btn { font-size: 11px; }
 }
 
 /* ---------- Knopfspalte links neben dem Kompassbereich ---------- */
@@ -373,6 +372,8 @@ body.gallery-open .panel { visibility: hidden; }
   gap: 10px;
 }
 .icon-btn[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+/* Kalibrieren-Knopf rot, solange die Karte manuell verändert wurde */
+.icon-btn.alert { background: #e5342a; border-color: rgba(255,255,255,0.5); color: #fff; }
 body.typing .side-btns { display: none; }
 
 /* ---------- Markierungsringe (vorerst ohne Funktion) ---------- */
@@ -383,7 +384,10 @@ body.typing .side-btns { display: none; }
   border: 3px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.45);
   pointer-events: none;
+  transition: border-color 0.2s;
 }
+/* Unterer Ring blau, solange die Karte kalibriert ist */
+.ring.active { border-color: #2f80ff; }
 .ring-top {
   position: fixed;
   z-index: 900;

@@ -11,9 +11,14 @@ einer direkten Linie (Großkreis) dazwischen.
 ## Funktionen
 
 Bedienung: Links neben dem Kompassbereich liegen (von unten nach oben)
-**Kalibrieren** (Karte auf Position und Zuhause ausrichten), **Teilen** und
-**Einstellungen** (blendet oben GPS/Simulation und die Adresssuche ein).
-Zwei Ringe – oben und über dem Kompassbereich – sind vorerst reine Markierungen.
+**Kalibrieren**, **Teilen** und **Einstellungen** (blendet oben GPS/Simulation
+und die Adresssuche ein).
+
+Kalibrieren dreht und zoomt die Karte so, dass die aktuelle Position mittig im
+unteren Ring und Zuhause mittig im oberen Ring liegt; der untere Ring wird blau.
+Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
+Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
+GPS-Positionen automatisch.
 
 - **GPS-Modus**: Position über die Ortungsfunktion des Geräts (inkl. Genauigkeitskreis).
 - **Simulationsmodus**: Adresse eingeben (Geocodierung über OpenStreetMap/Nominatim)
@@ -70,3 +75,6 @@ freigegeben werden (Vorgabe von iOS).
   (Nominatim: max. 1 Anfrage/Sekunde, keine Massenabfragen). Für privaten
   Gebrauch sollte das passen – eine rechtliche Prüfung ist das nicht.
 - Leaflet 1.9.4 liegt unter `vendor/leaflet` (BSD-2-Clause-Lizenz).
+- leaflet-rotate 0.2.8 (Kartendrehung) liegt unter `vendor/leaflet-rotate`
+  und steht unter der **GPL-3.0**. Wer die App weitergibt, muss deren
+  Bedingungen beachten.
