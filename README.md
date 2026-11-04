@@ -20,6 +20,10 @@ entspricht; der untere Ring wird blau. Gedreht wird die Karte – auch in der
 Simulation – nur vom Kompass (ohne Kompass: Norden oben); den Heimatpunkt bringt
 man durch Drehen des Handys in den oberen Ring.
 
+Dreht man die Karte von Hand mit zwei Fingern (ab ca. 12° Fingerdrehung),
+schaltet sich das automatische Drehen mit dem Kompass ab, bis man wieder auf
+Kalibrieren tippt.
+
 Beim Start erscheint der Hinweis, das Handy flach zu halten.
 
 Der Kompassbereich (rechts neben den Knöpfen) zeigt nur Kompass und

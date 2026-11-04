@@ -108,13 +108,90 @@ function formatDistance(m) {
 }
 
 /* ---------- Karte ---------- */
+/* Zwei-Finger-Drehen (leaflet-rotate 0.2.8, angepasst):
+ * - Drehen erst ab 12° Fingerdrehung, damit normales Zoomen nicht dreht
+ * - Beim Einsetzen des Drehens feuert die Karte 'userrotate'
+ * - Behebt, dass nach einer Berührung ohne Bewegung keine Gesten mehr gingen */
+const ROTATE_THRESHOLD = 12;
+let gestureActive = false;
+(function patchTouchGestures() {
+  const TG = L.Map.TouchGestures.prototype;
+  const wrap = (d) => ((d + 540) % 360) - 180;
+  const angleOf = (e, map) => {
+    const v = map.mouseEventToContainerPoint(e.touches[0]).subtract(map.mouseEventToContainerPoint(e.touches[1]));
+    return Math.atan2(v.y, v.x) * 180 / Math.PI;
+  };
+  const origStart = TG._onTouchStart;
+  TG._onTouchStart = function (e) {
+    origStart.call(this, e);
+    if (this._rotating || this._zooming) {
+      gestureActive = true;
+      this._rotEngaged = false;
+      this._a0 = angleOf(e, this._map);
+      this._b0 = this._map.getBearing();
+    }
+  };
+  TG._onTouchMove = function (e) {
+    if (!e.touches || e.touches.length !== 2 || !(this._zooming || this._rotating)) return;
+    const map = this._map;
+    const p1 = map.mouseEventToContainerPoint(e.touches[0]);
+    const p2 = map.mouseEventToContainerPoint(e.touches[1]);
+    const scale = p1.distanceTo(p2) / this._startDist;
+    if (this._rotating) {
+      const a = angleOf(e, map);
+      const d = wrap(a - this._a0);
+      if (!this._rotEngaged && Math.abs(d) > ROTATE_THRESHOLD) {
+        this._rotEngaged = true;
+        this._a0 = a; // ab hier ohne Sprung weiterdrehen
+        this._b0 = map.getBearing();
+        map.fire('userrotate');
+      } else if (this._rotEngaged) {
+        map.setBearing(this._b0 + d);
+      }
+    }
+    if (this._zooming) {
+      this._zoom = map.getScaleZoom(scale, this._startZoom);
+      if (!map.options.bounceAtZoomLimits && (
+        (this._zoom < map.getMinZoom() && scale < 1) || (this._zoom > map.getMaxZoom() && scale > 1))) {
+        this._zoom = map._limitZoom(this._zoom);
+      }
+      if (map.options.touchZoom === 'center') {
+        this._center = this._startLatLng;
+        if (scale === 1) return;
+      } else {
+        const delta = p1._add(p2)._divideBy(2)._subtract(this._centerPoint);
+        if (scale === 1 && delta.x === 0 && delta.y === 0) return;
+        const alpha = -map.getBearing() * L.DomUtil.DEG_TO_RAD;
+        this._center = map.unproject(map.project(this._pinchStartLatLng).subtract(delta.rotate(alpha)));
+      }
+    }
+    if (!this._zooming) { L.DomEvent.preventDefault(e); return; }
+    if (!this._moved) { map._moveStart(true, false); this._moved = true; }
+    L.Util.cancelAnimFrame(this._animRequest);
+    const moveFn = map._move.bind(map, this._center, this._zoom, { pinch: true, round: false }, undefined);
+    this._animRequest = L.Util.requestAnimFrame(moveFn, this, true);
+    L.DomEvent.preventDefault(e);
+  };
+  const origEnd = TG._onTouchEnd;
+  TG._onTouchEnd = function (e) {
+    const moved = this._moved;
+    origEnd.call(this, e);
+    if (!moved) {
+      this._rotating = false;
+      L.DomEvent.off(document, 'touchmove', this._onTouchMove, this)
+        .off(document, 'touchend touchcancel', this._onTouchEnd, this);
+    }
+    gestureActive = false;
+  };
+})();
+
 const map = L.map('map', {
   zoomControl: false, attributionControl: true, worldCopyJump: true,
   zoomSnap: 0,              // stufenloser Zoom, damit der Abstand exakt passt
   inertia: false,           // kein Nachgleiten nach dem Ziehen
   fadeAnimation: false,     // Kacheln ohne Einblenden (kein Flackern)
   rotate: true,             // Drehung über leaflet-rotate
-  rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false,
+  rotateControl: false, touchRotate: true, shiftKeyRotate: false, compassBearing: false,
 })
   .setView([HOME.approx.lat, HOME.approx.lon], 13);
 
@@ -189,7 +266,9 @@ const ringCenter = (elm) => {
 // Position mittig im unteren Ring und Zuhause mittig im oberen Ring liegt.
 // Dreht sich die Karte gerade mit dem Kompass? (nur GPS-Modus mit Kompassdaten)
 // Karte dreht sich mit dem Kompass – in GPS und Simulation gleichermaßen
-const followsCompass = () => state.heading !== null;
+// (aus, nachdem die Karte von Hand mit zwei Fingern gedreht wurde – bis
+// zum nächsten Tippen auf Kalibrieren)
+const followsCompass = () => state.heading !== null && state.autoRotate !== false;
 
 // Kalibrieren: Karte so zoomen und verschieben, dass die aktuelle (bzw.
 // simulierte) Position mittig im unteren Ring liegt und der Abstand zu Zuhause
@@ -521,7 +600,7 @@ let rawHeadingFrame = null;
 let lastAppliedHeading = null;
 // GPS-Modus: Karte dreht sich mit dem Kompass (Blickrichtung oben)
 function rotateWithCompass() {
-  if (!followsCompass()) return;
+  if (!followsCompass() || gestureActive) return;
   if (lastAppliedHeading !== null) {
     let d = Math.abs(norm360(state.heading - lastAppliedHeading));
     if (d > 180) d = 360 - d;
@@ -1197,7 +1276,15 @@ function showStartHint() {
 /* ---------- Start ---------- */
 el.modeGps.addEventListener('click', () => setMode('gps'));
 el.modeSim.addEventListener('click', () => setMode('sim'));
-el.fitBtn.addEventListener('click', () => calibrate());
+el.fitBtn.addEventListener('click', () => {
+  state.autoRotate = true; // automatisches Drehen wieder einschalten
+  calibrate();
+});
+// Manuelles Drehen mit zwei Fingern: Automatik aus, nicht mehr kalibriert
+map.on('userrotate', () => {
+  state.autoRotate = false;
+  setCalibrated(false);
+});
 window.addEventListener('resize', () => {
   if (state.calibrated && !document.body.classList.contains('typing')) calibrate();
 });
