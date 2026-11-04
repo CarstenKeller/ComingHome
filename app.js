@@ -29,10 +29,8 @@ const state = {
   watchId: null,
   userMovedMap: false,
   gpsError: null,
-  topOpen: true,        // obere Leiste (Moduswahl + Suchfeld) sichtbar?
+  topOpen: false,       // Einstellungen (Moduswahl + Suchfeld) oben eingeblendet?
 };
-const TOP_OPEN_KEY = 'cominghome.topOpen';
-try { state.topOpen = localStorage.getItem(TOP_OPEN_KEY) !== '0'; } catch (_) { /* egal */ }
 
 // Bilder der Galerie am Heimatpunkt (Reihenfolge = Anzeige)
 const GALLERY = ['01', '02', '03', '04', '05', '06', '07'].map((n) => `gallery/${n}.jpg`);
@@ -41,7 +39,8 @@ const GALLERY = ['01', '02', '03', '04', '05', '06', '07'].map((n) => `gallery/$
 const $ = (id) => document.getElementById(id);
 const el = {
   shareBtn: $('shareBtn'), toast: $('toast'),
-  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), topToggle: $('topToggle'), modeSwitch: $('modeSwitch'), topbar: document.querySelector('.topbar'),
+  modeGps: $('modeGps'), modeSim: $('modeSim'), fitBtn: $('fitBtn'), settingsBtn: $('settingsBtn'), modeSwitch: $('modeSwitch'), topbar: $('topbar'),
+  ringTop: document.querySelector('.ring-top'), ringBottom: document.querySelector('.ring-bottom'),
   simForm: $('simForm'), simInput: $('simInput'), simResults: $('simResults'),
   dial: $('dial'), arrow: $('arrow'),
   distance: $('distance'), bearing: $('bearing'), status: $('status'),
@@ -145,9 +144,11 @@ function fitBoth() {
   if (state.home) pts.push([state.home.lat, state.home.lon]);
   if (pos) pts.push([pos.lat, pos.lon]);
   if (!pts.length) return;
-  const topEl = !el.simForm.classList.contains('hidden') ? el.simForm : el.topbar;
-  const topPad = topEl.getBoundingClientRect().bottom + 30;
-  const bottomPad = window.innerHeight - el.panel.getBoundingClientRect().top + 30;
+  let topEl = el.ringTop;
+  if (!el.simForm.classList.contains('hidden')) topEl = el.simForm;
+  else if (!el.topbar.classList.contains('collapsed')) topEl = el.topbar;
+  const topPad = topEl.getBoundingClientRect().bottom + 24;
+  const bottomPad = window.innerHeight - el.ringBottom.getBoundingClientRect().top + 24;
   programmaticMove = true;
   if (pts.length === 1) {
     map.setView(pts[0], 16);
@@ -219,7 +220,7 @@ function render() {
     el.panel.classList.toggle('arrived', arrived);
     el.distance.textContent = arrived ? 'Zuhause!' : formatDistance(dist);
     el.bearing.textContent = arrived ? `${formatDistance(dist)} entfernt`
-      : `Richtung ${cardinal(brg)} · ${Math.round(brg)}°`;
+      : `${cardinal(brg)} · ${Math.round(brg)}°`;
     const heading = state.heading ?? 0;
     el.arrow.style.transform = `rotate(${smoothAngle('arrow', brg - heading)}deg)`;
   }
@@ -228,7 +229,7 @@ function render() {
 
   if (state.mode === 'sim') {
     status.push(state.simPos
-      ? `<span class="warn">Simulation:</span> ${escapeHtml(shorten(state.simPos.label, 60))}${state.simPos.time ? ` (${formatAge(state.simPos.time)})` : ''}`
+      ? `<span class="warn">Simulation:</span> ${escapeHtml(shorten(state.simPos.label, 40))}${state.simPos.time ? ` (${formatAge(state.simPos.time)})` : ''}`
       : '<span class="warn">Simulationsmodus</span>');
   } else if (state.gpsError) {
     status.push(`<span class="warn">${escapeHtml(state.gpsError)}</span>`);
@@ -237,10 +238,10 @@ function render() {
   }
 
   if (state.heading === null) {
-    status.push('<span class="warn">Kein Kompass – Pfeil gilt für Norden oben (wie Karte)</span>');
+    status.push('<span class="warn">Kein Kompass: Norden oben</span>');
   }
   if (state.home?.approx) {
-    status.push('<span class="warn">Heimatposition nur ungefähr (Geocodierung fehlgeschlagen)</span>');
+    status.push('<span class="warn">Zuhause nur ungefähr</span>');
   }
   el.status.innerHTML = status.join('<br>');
 }
@@ -427,13 +428,12 @@ function applyTop() {
   const open = state.topOpen;
   el.topbar.classList.toggle('collapsed', !open);
   el.simForm.classList.toggle('hidden', !(open && state.mode === 'sim'));
-  el.topToggle.setAttribute('aria-pressed', String(open));
+  el.settingsBtn.setAttribute('aria-pressed', String(open));
   if (!open) el.simInput.blur();
 }
 
-el.topToggle.addEventListener('click', () => {
+el.settingsBtn.addEventListener('click', () => {
   state.topOpen = !state.topOpen;
-  try { localStorage.setItem(TOP_OPEN_KEY, state.topOpen ? '1' : '0'); } catch (_) { /* egal */ }
   applyTop();
   if (!state.userMovedMap) fitBoth();
 });
@@ -542,7 +542,7 @@ function parseSharedPosition(text) {
 }
 
 function applySharedPosition(p) {
-  const label = `Geteilte Position ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}${p.time ? `, Stand ${formatTime(p.time)} Uhr` : ''}`;
+  const label = p.time ? `geteilt, Stand ${formatTime(p.time)} Uhr` : `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   [...el.simResults.children].forEach((c) => c.remove());
   state.simPos = { lat: p.lat, lon: p.lon, label, time: p.time };
   if (state.mode !== 'sim') setMode('sim');

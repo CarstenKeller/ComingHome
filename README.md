@@ -10,6 +10,11 @@ einer direkten Linie (Großkreis) dazwischen.
 
 ## Funktionen
 
+Bedienung: Links neben dem Kompassbereich liegen (von unten nach oben)
+**Kalibrieren** (Karte auf Position und Zuhause ausrichten), **Teilen** und
+**Einstellungen** (blendet oben GPS/Simulation und die Adresssuche ein).
+Zwei Ringe – oben und über dem Kompassbereich – sind vorerst reine Markierungen.
+
 - **GPS-Modus**: Position über die Ortungsfunktion des Geräts (inkl. Genauigkeitskreis).
 - **Simulationsmodus**: Adresse eingeben (Geocodierung über OpenStreetMap/Nominatim)
   oder direkt auf die Karte tippen – diese Position wird statt GPS verwendet.

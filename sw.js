@@ -1,6 +1,6 @@
 // Service Worker: hält die App-Dateien offline vor (Netzwerk zuerst, sonst Cache).
 // Kartenkacheln und Geocodierung werden nicht gecacht.
-const CACHE = 'cominghome-v9';
+const CACHE = 'cominghome-v10';
 const SHELL = [
   './', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon.svg',
   'icon-192.png', 'icon-512.png', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
