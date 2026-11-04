@@ -20,6 +20,13 @@ Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
 Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
 GPS-Positionen automatisch.
 
+Im GPS-Modus mit Kompass dreht sich die Karte mit dem Handy (Blickrichtung
+oben). Schaut man bis auf ca. 6° in Richtung Zuhause, rastet die Karte ein:
+Der Heimatpunkt liegt dann genau im oberen Ring, beide werden grün, der Ring
+pulsiert und das Handy vibriert 2 Sekunden (Vibration nur, wo der Browser sie
+unterstützt – z. B. Android/Chrome, nicht iPhone/Safari). Gelöst wird die
+Einrastung erst ab ca. 10° Abweichung.
+
 - **GPS-Modus**: Position über die Ortungsfunktion des Geräts (inkl. Genauigkeitskreis).
 - **Simulationsmodus**: Adresse eingeben (Geocodierung über OpenStreetMap/Nominatim)
   oder direkt auf die Karte tippen – diese Position wird statt GPS verwendet.

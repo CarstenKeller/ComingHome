@@ -140,12 +140,13 @@ let accCircle = null;
 const lineHalo = L.polyline([], { color: '#000', weight: 7, opacity: 0.35, interactive: false }).addTo(map);
 const line = L.polyline([], { color: '#ff5a3c', weight: 4, opacity: 0.95, dashArray: '10 8', interactive: false }).addTo(map);
 
+// Kartenänderungen durch die App selbst (synchron, ohne Animation) dürfen
+// den kalibrierten Zustand nicht aufheben.
 let programmaticMove = false;
-let programmaticTimer = null;
-function beginProgrammatic() {
+function programmatic(fn) {
+  const prev = programmaticMove;
   programmaticMove = true;
-  clearTimeout(programmaticTimer);
-  programmaticTimer = setTimeout(() => { programmaticMove = false; }, 300);
+  try { fn(); } finally { programmaticMove = prev; }
 }
 
 // Manuelles Verschieben/Zoomen beendet den kalibrierten Zustand
@@ -166,14 +167,27 @@ const ringCenter = (elm) => {
 
 // Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
 // Position mittig im unteren Ring und Zuhause mittig im oberen Ring liegt.
+// Einrasten: Liegt die Blickrichtung nahe genug an der Richtung nach Hause,
+// wird die Karte exakt auf Zuhause ausgerichtet (mit Hysterese gegen Flattern).
+const SNAP_IN_DEG = 6;
+const SNAP_OUT_DEG = 10;
+let snapped = false;
+
+// Dreht sich die Karte gerade mit dem Kompass? (nur GPS-Modus mit Kompassdaten)
+const followsCompass = () => state.mode === 'gps' && state.heading !== null;
+
+// Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
+// Position mittig im unteren Ring liegt und der Abstand zu Zuhause dem Abstand
+// der Ringmittelpunkte entspricht. Im GPS-Modus mit Kompass zeigt die
+// Blickrichtung nach oben, sonst die Richtung nach Hause.
 function calibrate() {
   const pos = currentPos();
   const home = state.home;
-  beginProgrammatic();
   if (!pos || !home) {
     const p = pos || home;
-    if (p) map.setView([p.lat, p.lon], 15, { animate: false });
+    if (p) programmatic(() => map.setView([p.lat, p.lon], 15, { animate: false }));
     setCalibrated(true);
+    updateHomeLock();
     return;
   }
   const bottom = ringCenter(el.ringBottom);
@@ -190,17 +204,53 @@ function calibrate() {
   // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
   const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
 
+  // Welche Richtung soll nach oben zeigen?
+  let up = angle;
+  if (followsCompass()) {
+    let diff = norm360(state.heading - angle);
+    if (diff > 180) diff -= 360;
+    if (snapped ? Math.abs(diff) > SNAP_OUT_DEG : Math.abs(diff) < SNAP_IN_DEG) snapped = !snapped;
+    up = snapped ? angle : state.heading;
+  } else {
+    snapped = false;
+  }
+
   let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
 
-  map.setBearing(axis - angle);
-  map.setView([pos.lat, pos.lon], zoom, { animate: false });
-  // Position liegt jetzt in der Bildschirmmitte -> so verschieben, dass sie im unteren Ring liegt
-  const c = map.getSize().divideBy(2);
-  const target = c.multiplyBy(2).subtract(bottom);
-  map.setView(map.containerPointToLatLng(target), zoom, { animate: false });
+  programmatic(() => {
+    map.setBearing(axis - up);
+    map.setView([pos.lat, pos.lon], zoom, { animate: false });
+    // Position liegt jetzt in der Bildschirmmitte -> so verschieben, dass sie im unteren Ring liegt
+    const c = map.getSize().divideBy(2);
+    const target = c.multiplyBy(2).subtract(bottom);
+    map.setView(map.containerPointToLatLng(target), zoom, { animate: false });
+  });
   setCalibrated(true);
+  updateHomeLock();
 }
+
+// Liegt der Heimatpunkt komplett im oberen Ring? -> grün, Ring pulsiert,
+// beim Einrasten 2 s Vibration.
+const HOME_RADIUS = 17;  // Heimatpunkt 34 px
+const RING_RADIUS = 20;  // Ring 40 px (Außenkante)
+let homeLocked = false;
+function updateHomeLock() {
+  const pos = currentPos();
+  let inside = false;
+  if (state.home && pos && homeMarker) {
+    const hp = map.latLngToContainerPoint([state.home.lat, state.home.lon]);
+    inside = hp.distanceTo(ringCenter(el.ringTop)) + HOME_RADIUS <= RING_RADIUS + 0.5;
+  }
+  if (inside === homeLocked) return;
+  homeLocked = inside;
+  el.ringTop.classList.toggle('locked', inside);
+  homeMarker?.getElement()?.querySelector('.marker-home')?.classList.toggle('locked', inside);
+  if (inside && navigator.vibrate) {
+    try { navigator.vibrate(2000); } catch (_) { /* nicht unterstützt */ }
+  }
+}
+map.on('move zoom rotate', () => { if (!programmaticMove) updateHomeLock(); });
 
 function currentPos() {
   return state.mode === 'sim' ? state.simPos : state.gpsPos;
@@ -394,6 +444,24 @@ function screenAngle() {
 }
 
 let rawHeadingFrame = null;
+let lastAppliedHeading = null;
+// GPS-Modus: Karte dreht sich mit dem Kompass (Blickrichtung oben)
+function rotateWithCompass() {
+  if (!followsCompass()) return;
+  if (lastAppliedHeading !== null) {
+    let d = Math.abs(norm360(state.heading - lastAppliedHeading));
+    if (d > 180) d = 360 - d;
+    if (d < 0.5) return; // kleine Änderungen ignorieren
+  }
+  lastAppliedHeading = state.heading;
+  if (state.calibrated) {
+    calibrate();
+  } else {
+    // Manuell verschobene Karte: um die Bildmitte drehen
+    programmatic(() => map.setBearing(-state.heading));
+    updateHomeLock();
+  }
+}
 function onOrientation(e) {
   let h = null;
   if (typeof e.webkitCompassHeading === 'number' && !Number.isNaN(e.webkitCompassHeading)) {
@@ -416,7 +484,11 @@ function onOrientation(e) {
   }
   el.compassBtn.classList.add('hidden');
   if (!rawHeadingFrame) {
-    rawHeadingFrame = requestAnimationFrame(() => { rawHeadingFrame = null; render(); });
+    rawHeadingFrame = requestAnimationFrame(() => {
+      rawHeadingFrame = null;
+      render();
+      rotateWithCompass();
+    });
   }
 }
 
