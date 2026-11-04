@@ -173,14 +173,13 @@ const ringCenter = (elm) => {
 // Kalibrieren: Karte so drehen, zoomen und verschieben, dass die aktuelle
 // Position mittig im unteren Ring und Zuhause mittig im oberen Ring liegt.
 // Dreht sich die Karte gerade mit dem Kompass? (nur GPS-Modus mit Kompassdaten)
-const followsCompass = () => state.mode === 'gps' && state.heading !== null;
+// Karte dreht sich mit dem Kompass – in GPS und Simulation gleichermaßen
+const followsCompass = () => state.heading !== null;
 
-// Kalibrieren: Karte so zoomen und verschieben, dass die aktuelle Position
-// mittig im unteren Ring liegt und der Abstand zu Zuhause dem Abstand der
-// Ringmittelpunkte entspricht. Die Drehung kommt im GPS-Modus allein vom
-// Kompass (ohne Kompass: Norden oben) – den Heimatpunkt bringt man durch
-// Drehen des Handys in den oberen Ring. Nur in der Simulation zeigt die
-// Richtung nach Hause nach oben.
+// Kalibrieren: Karte so zoomen und verschieben, dass die aktuelle (bzw.
+// simulierte) Position mittig im unteren Ring liegt und der Abstand zu Zuhause
+// dem Abstand der Ringmittelpunkte entspricht. Die Drehung kommt allein vom
+// Kompass (ohne Kompass: Norden oben).
 function calibrate() {
   const pos = currentPos();
   const home = state.home;
@@ -188,8 +187,7 @@ function calibrate() {
     const p = pos || home;
     programmatic(() => {
       // Auch ohne GPS-Position mit dem Kompass drehen
-      if (followsCompass()) map.setBearing(-state.heading);
-      else if (state.mode === 'gps') map.setBearing(0);
+      map.setBearing(followsCompass() ? -state.heading : 0);
       if (p) map.setView([p.lat, p.lon], 15, { animate: false });
     });
     setCalibrated(true);
@@ -210,11 +208,9 @@ function calibrate() {
   // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
   const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
 
-  // Welche Richtung zeigt nach oben?
-  let up;
-  if (followsCompass()) up = state.heading;       // am Kompass ausgerichtet
-  else if (state.mode === 'gps') up = 0;          // kein Kompass: Norden oben
-  else up = angle;                                // Simulation: Richtung nach Hause
+  // Oben ist immer die Blickrichtung laut Kompass (ohne Kompass: Norden).
+  // Den Heimatpunkt bringt man durch Drehen des Handys in den oberen Ring.
+  const up = followsCompass() ? state.heading : 0;
 
   let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
@@ -341,7 +337,7 @@ function render() {
       unavailable: '<span class="warn">Kein Kompass: Norden oben</span>',
       pending: '<span class="warn">Warte auf Kompass …</span>',
     }[compassState] || '<span class="warn">Kein Kompass</span>');
-  } else if (state.mode === 'gps') {
+  } else {
     status.push(`Kompass ${Math.round(state.heading)}°`);
   }
   if (state.home?.approx) {

@@ -16,18 +16,16 @@ und die Adresssuche ein).
 
 Kalibrieren zoomt und verschiebt die Karte so, dass die aktuelle Position
 mittig im unteren Ring liegt und der Abstand zu Zuhause dem Abstand der Ringe
-entspricht; der untere Ring wird blau. Gedreht wird die Karte im GPS-Modus nur
-vom Kompass (ohne Kompass: Norden oben) – den Heimatpunkt bringt man durch
-Drehen des Handys in den oberen Ring. In der Simulation zeigt die Richtung nach
-Hause nach oben.
+entspricht; der untere Ring wird blau. Gedreht wird die Karte – auch in der
+Simulation – nur vom Kompass (ohne Kompass: Norden oben); den Heimatpunkt bringt
+man durch Drehen des Handys in den oberen Ring.
 
-Beim Start erscheint ein Hinweis: Handy flach halten, automatische
-Bildschirmdrehung ausschalten.
+Beim Start erscheint der Hinweis, das Handy flach zu halten.
 Verschiebt oder zoomt man die Karte von Hand, wird der Ring wieder weiß und der
 Kalibrieren-Knopf rot. Im kalibrierten Zustand folgt die Karte neuen
 GPS-Positionen automatisch.
 
-Im GPS-Modus mit Kompass ist die Karte am Kompass ausgerichtet und dreht sich
+Mit Kompass ist die Karte am Kompass ausgerichtet und dreht sich
 mit dem Handy (Blickrichtung oben). Zeigt das Handy genau auf das Zuhause
 (Heimatpunkt höchstens 12 px vom Ringmittelpunkt, ca. 1°), rastet es ein:
 Heimatpunkt und oberer Ring werden grün, der Ring pulsiert und das Handy
