@@ -165,6 +165,16 @@ function setCalibrated(on) {
   el.fitBtn.classList.toggle('alert', !on);
 }
 
+// Unter NEAR_METERS wird nicht weiter gezoomt: Stattdessen wandern die beiden
+// Ringe gleichmäßig aufeinander zu (Abstand proportional zur Entfernung).
+const NEAR_METERS = 200;
+let ringShift = 0; // aktuelle Verschiebung jedes Rings Richtung Mitte (px)
+function setRingShift(px) {
+  ringShift = px;
+  el.ringTop.style.transform = px ? `translateY(${px}px)` : '';
+  el.ringBottom.style.transform = px ? `translateY(${-px}px)` : '';
+}
+
 const ringCenter = (elm) => {
   const r = elm.getBoundingClientRect();
   return L.point(r.left + r.width / 2, r.top + r.height / 2);
@@ -194,9 +204,18 @@ function calibrate() {
     updateHomeLock();
     return;
   }
-  const bottom = ringCenter(el.ringBottom);
-  const top = ringCenter(el.ringTop);
-  const wanted = bottom.distanceTo(top); // Abstand der Ringmittelpunkte in px
+  // Grundpositionen der Ringe (ohne Verschiebung)
+  const baseBottom = ringCenter(el.ringBottom).add(L.point(0, ringShift));
+  const baseTop = ringCenter(el.ringTop).subtract(L.point(0, ringShift));
+  const full = baseBottom.distanceTo(baseTop);
+  const meters = distanceMeters(pos, home);
+  // Nah dran: Ringe rücken zusammen, Zoom bleibt auf dem 200-m-Maßstab
+  const near = meters < NEAR_METERS;
+  const shift = near ? (full - full * meters / NEAR_METERS) / 2 : 0;
+  setRingShift(shift);
+  const bottom = baseBottom.subtract(L.point(0, shift));
+  const top = baseTop.add(L.point(0, shift));
+  const wanted = full - 2 * shift; // Abstand der Ringmittelpunkte in px
 
   // Richtung und Abstand in Kartenpixeln (Zoom 0, ungedreht)
   const p1 = map.project([pos.lat, pos.lon], 0);
@@ -206,13 +225,20 @@ function calibrate() {
   // Winkel des Vektors Position -> Zuhause, im Uhrzeigersinn ab "oben"
   const angle = Math.atan2(d.x, -d.y) * 180 / Math.PI;
   // Winkel der Ringachse (unten -> oben) auf dem Bildschirm
-  const axis = Math.atan2(top.x - bottom.x, -(top.y - bottom.y)) * 180 / Math.PI;
+  const axis = Math.atan2(baseTop.x - baseBottom.x, -(baseTop.y - baseBottom.y)) * 180 / Math.PI;
 
   // Oben ist immer die Blickrichtung laut Kompass (ohne Kompass: Norden).
   // Den Heimatpunkt bringt man durch Drehen des Handys in den oberen Ring.
   const up = followsCompass() ? state.heading : 0;
 
-  let zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
+  let zoom;
+  if (near) {
+    // Maßstab: 200 m entsprechen dem vollen Ringabstand
+    const mPerPx0 = 40075016 * Math.cos(pos.lat * Math.PI / 180) / 256;
+    zoom = Math.log2(full / (NEAR_METERS / mPerPx0));
+  } else {
+    zoom = d0 > 0 ? Math.log2(wanted / d0) : map.getMaxZoom();
+  }
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
 
   programmatic(() => {
@@ -312,6 +338,7 @@ function render() {
     const brg = initialBearing(pos, state.home);
     const arrived = dist <= Math.max(ARRIVED_METERS, state.mode === 'gps' ? (pos.acc || 0) : 0);
     el.panel.classList.toggle('arrived', arrived);
+    checkArrival(arrived, dist);
     el.distance.textContent = arrived ? 'Zuhause!' : formatDistance(dist);
     el.bearing.textContent = arrived ? `${formatDistance(dist)} entfernt`
       : `${cardinal(brg)} · ${Math.round(brg)}°`;
@@ -1018,6 +1045,91 @@ map.on('moveend', () => schedulePrefetch());
 // verschiebt sich der untere Ring -> neu ausrichten.
 if ('ResizeObserver' in window) {
   new ResizeObserver(() => { if (state.calibrated) calibrate(); }).observe(el.panel);
+}
+
+/* ---------- Ankunft: Feuerwerk ---------- */
+// Einmal pro Ankunft; erneut erst, nachdem man sich wieder > 60 m entfernt hat.
+let arrivalCelebrated = false;
+function checkArrival(arrived, dist) {
+  if (arrived && !arrivalCelebrated) {
+    arrivalCelebrated = true;
+    fireworks(10000);
+    if (navigator.vibrate) {
+      // Rhythmisch vibrieren, passend zu den Raketen (ca. 10 s)
+      const pattern = [];
+      for (let t = 0; t < 10000; t += 700) pattern.push(350, 350);
+      try { navigator.vibrate(pattern); } catch (_) { /* nicht unterstützt */ }
+    }
+  } else if (!arrived && dist > 60) {
+    arrivalCelebrated = false;
+  }
+}
+
+function fireworks(duration) {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'fireworks';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const resize = () => {
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  const colors = ['#ff5a3c', '#ffc857', '#3ddc84', '#2f80ff', '#b45cff', '#ffffff', '#ff7ab6'];
+  const rockets = [];
+  const sparks = [];
+  const start = performance.now();
+  let lastLaunch = 0;
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  function launch() {
+    rockets.push({
+      x: innerWidth * (0.15 + Math.random() * 0.7), y: innerHeight,
+      vx: (Math.random() - 0.5) * 1.5, vy: -(innerHeight / 75) * (0.8 + Math.random() * 0.35),
+      color: colors[Math.floor(Math.random() * colors.length)],
+    });
+  }
+  function explode(r) {
+    const n = 60 + Math.floor(Math.random() * 40);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, v = 1.5 + Math.random() * 3.5;
+      sparks.push({ x: r.x, y: r.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, color: Math.random() < 0.8 ? r.color : '#fff' });
+    }
+  }
+  function frame(now) {
+    const t = now - start;
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, innerWidth, innerHeight);
+    ctx.globalCompositeOperation = 'lighter';
+    if (t < duration - 1500 && now - lastLaunch > (reduced ? 900 : 350)) { launch(); lastLaunch = now; }
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i];
+      r.x += r.vx; r.y += r.vy; r.vy += 0.12;
+      ctx.fillStyle = r.color;
+      ctx.beginPath(); ctx.arc(r.x, r.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      if (r.vy >= -1) { explode(r); rockets.splice(i, 1); }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.vx *= 0.985; p.vy *= 0.985;
+      p.life -= 0.012;
+      if (p.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (t < duration) requestAnimationFrame(frame);
+    else {
+      canvas.classList.add('done');
+      setTimeout(() => { window.removeEventListener('resize', resize); canvas.remove(); }, 600);
+    }
+  }
+  requestAnimationFrame(frame);
 }
 
 /* ---------- Start-Hinweis ---------- */

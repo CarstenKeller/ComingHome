@@ -514,3 +514,15 @@ body.typing .side-btns { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .gallery-btn.materializing, .gallery-btn.dematerializing { animation-duration: 0.01s; }
 }
+
+/* ---------- Feuerwerk bei Ankunft ---------- */
+.fireworks {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2800;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.fireworks.done { opacity: 0; }
