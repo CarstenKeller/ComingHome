@@ -184,7 +184,11 @@ function calibrate() {
   const home = state.home;
   if (!pos || !home) {
     const p = pos || home;
-    if (p) programmatic(() => map.setView([p.lat, p.lon], 15, { animate: false }));
+    programmatic(() => {
+      // Auch ohne GPS-Position mit dem Kompass drehen
+      if (followsCompass()) map.setBearing(-state.heading);
+      if (p) map.setView([p.lat, p.lon], 15, { animate: false });
+    });
     setCalibrated(true);
     updateHomeLock();
     return;
@@ -326,7 +330,14 @@ function render() {
   }
 
   if (state.heading === null) {
-    status.push('<span class="warn">Kein Kompass: Pfeil ab Nord</span>');
+    status.push({
+      'needs-permission': '<span class="warn">Kompass aus – bitte aktivieren</span>',
+      denied: '<span class="warn">Kompass verweigert (Einstellungen)</span>',
+      unavailable: '<span class="warn">Kein Kompass: Karte nicht gedreht</span>',
+      pending: '<span class="warn">Warte auf Kompass …</span>',
+    }[compassState] || '<span class="warn">Kein Kompass</span>');
+  } else if (state.mode === 'gps') {
+    status.push(`Kompass ${Math.round(state.heading)}°`);
   }
   if (state.home?.approx) {
     status.push('<span class="warn">Zuhause nur ungefähr</span>');
@@ -490,6 +501,7 @@ function onOrientation(e) {
     state.heading = norm360(state.heading + d * 0.25);
   }
   el.compassBtn.classList.add('hidden');
+  compassState = 'ok';
   if (!rawHeadingFrame) {
     rawHeadingFrame = requestAnimationFrame(() => {
       rawHeadingFrame = null;
@@ -503,27 +515,46 @@ let orientationListening = false;
 function listenOrientation() {
   if (orientationListening) return;
   orientationListening = true;
-  const type = ('ondeviceorientationabsolute' in window) ? 'deviceorientationabsolute' : 'deviceorientation';
-  window.addEventListener(type, onOrientation);
+  // Beide Ereignisse abonnieren: Je nach Browser liefert nur eines davon
+  // einen echten Kompasskurs (relative Werte werden in onOrientation verworfen).
+  if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', onOrientation);
+  window.addEventListener('deviceorientation', onOrientation);
+}
+
+let compassState = 'pending'; // pending | needs-permission | denied | unavailable | ok
+async function requestCompassPermission() {
+  try {
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res !== 'granted') {
+      compassState = 'denied';
+      el.compassBtn.textContent = 'Kompass verweigert';
+    }
+  } catch (err) {
+    compassState = 'unavailable';
+    el.compassBtn.textContent = 'Kompass nicht verfügbar';
+  }
+  render();
 }
 
 function initCompass() {
-  if (typeof DeviceOrientationEvent === 'undefined') return;
+  if (typeof DeviceOrientationEvent === 'undefined') { compassState = 'unavailable'; return; }
   // Sofort lauschen: wo keine Erlaubnis nötig ist, kommen die Daten direkt.
   listenOrientation();
   if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // z. B. iOS 13+: Erlaubnis nur per Nutzeraktion. Der Knopf verschwindet,
-    // sobald Kompassdaten eintreffen.
+    // z. B. iOS: Erlaubnis nur per Nutzeraktion. Der Knopf verschwindet,
+    // sobald Kompassdaten eintreffen. Zusätzlich wird beim ersten Tippen
+    // irgendwo auf der Seite automatisch nachgefragt.
+    compassState = 'needs-permission';
     el.compassBtn.classList.remove('hidden');
-    el.compassBtn.addEventListener('click', async () => {
-      try {
-        const res = await DeviceOrientationEvent.requestPermission();
-        if (res !== 'granted') el.compassBtn.textContent = 'Kompass verweigert';
-      } catch (err) {
-        el.compassBtn.textContent = 'Kompass nicht verfügbar';
-      }
-    });
+    el.compassBtn.addEventListener('click', requestCompassPermission);
+    const firstGesture = () => {
+      document.removeEventListener('click', firstGesture, true);
+      if (state.heading === null && compassState === 'needs-permission') requestCompassPermission();
+    };
+    document.addEventListener('click', firstGesture, true);
   }
+  // Kommen nach einigen Sekunden keine Daten, Hinweis anzeigen
+  setTimeout(() => { if (state.heading === null && compassState === 'pending') { compassState = 'unavailable'; render(); } }, 4000);
 }
 
 /* ---------- Simulation ---------- */
