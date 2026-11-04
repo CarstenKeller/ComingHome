@@ -2,7 +2,7 @@
 // - App-Dateien: Netzwerk zuerst, sonst Cache (offline nutzbar)
 // - Kartenkacheln (Esri): Cache zuerst; die App lädt den Bereich um die
 //   aktuelle Position vorab (Nachricht "prefetch").
-const CACHE = 'cominghome-v19';
+const CACHE = 'cominghome-v20';
 const TILE_CACHE = 'cominghome-tiles-v1';
 const TILE_HOST = 'server.arcgisonline.com';
 const MAX_TILES = 4000; // danach werden die ältesten Kacheln gelöscht

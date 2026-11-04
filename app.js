@@ -112,6 +112,7 @@ const map = L.map('map', {
   zoomControl: false, attributionControl: true, worldCopyJump: true,
   zoomSnap: 0,              // stufenloser Zoom, damit der Abstand exakt passt
   inertia: false,           // kein Nachgleiten nach dem Ziehen
+  fadeAnimation: false,     // Kacheln ohne Einblenden (kein Flackern)
   rotate: true,             // Drehung über leaflet-rotate
   rotateControl: false, touchRotate: false, shiftKeyRotate: false, compassBearing: false,
 })
@@ -169,6 +170,8 @@ function setCalibrated(on) {
 // Unter NEAR_METERS wird nicht weiter gezoomt: Stattdessen wandern die beiden
 // Ringe gleichmäßig aufeinander zu (Abstand proportional zur Entfernung).
 const NEAR_METERS = 200;
+// Zoomänderungen unter ~2 % (0,03 Stufen) ignorieren – verhindert Kachel-Neuaufbau
+const ZOOM_HYSTERESIS = 0.03;
 let ringShift = 0;
 let lastRingSpan = 550; // voller Ringabstand in px (zuletzt gemessen) // aktuelle Verschiebung jedes Rings Richtung Mitte (px)
 function setRingShift(px) {
@@ -244,13 +247,22 @@ function calibrate() {
   }
   zoom = Math.max(map.getMinZoom(), Math.min(19, zoom));
 
+  // Zoom nur ändern, wenn er sich spürbar unterscheidet: Jede Zoomänderung
+  // ohne Animation lässt Leaflet alle Kacheln neu aufbauen (Flackern).
+  const cur = map.getZoom();
+  if (Math.abs(zoom - cur) < ZOOM_HYSTERESIS) zoom = cur;
+
   programmatic(() => {
     map.setBearing(axis - up);
-    map.setView([pos.lat, pos.lon], zoom, { animate: false });
-    // Position liegt jetzt in der Bildschirmmitte -> so verschieben, dass sie im unteren Ring liegt
+    // Kartenmitte direkt so berechnen, dass die Position im unteren Ring liegt
+    // (ein einziges setView -> bei gleichem Zoom nur Verschieben, kein Neuaufbau)
     const c = map.getSize().divideBy(2);
-    const target = c.multiplyBy(2).subtract(bottom);
-    map.setView(map.containerPointToLatLng(target), zoom, { animate: false });
+    const v = bottom.subtract(c);
+    const th = map.getBearing() * Math.PI / 180;
+    const mx = v.x * Math.cos(th) + v.y * Math.sin(th);
+    const my = -v.x * Math.sin(th) + v.y * Math.cos(th);
+    const centerPx = map.project([pos.lat, pos.lon], zoom).subtract(L.point(mx, my));
+    map.setView(map.unproject(centerPx, zoom), zoom, { animate: false });
   });
   setCalibrated(true);
   updateHomeLock();
